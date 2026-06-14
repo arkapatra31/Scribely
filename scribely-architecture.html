@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scribely — Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:#070910;display:flex;align-items:center;justify-content:center;padding:24px;font-family:'Inter',system-ui,sans-serif}
+  .frame{width:100%;max-width:1200px}
+  svg{width:100%;height:auto;display:block}
+  @media(max-width:640px){body{padding:10px}}
+</style>
+</head>
+<body>
+<div class="frame">
+<svg viewBox="0 0 1140 700" xmlns="http://www.w3.org/2000/svg" font-family="'Inter', system-ui, -apple-system, Segoe UI, sans-serif" role="img" aria-label="Scribely system architecture diagram">
+  <defs>
+    <linearGradient id="spec" x1="0" y1="0" x2="1140" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B6CFF"/><stop offset="0.38" stop-color="#46A2FF"/><stop offset="0.66" stop-color="#3FE0D0"/><stop offset="1" stop-color="#FFC46B"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="200" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B6CFF"/><stop offset="0.6" stop-color="#3FE0D0"/><stop offset="1" stop-color="#FFC46B"/>
+    </linearGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#FFFFFF" stroke-opacity="0.022"/>
+    </pattern>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <marker id="aCyan" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 Z" fill="#3FE0D0"/></marker>
+    <marker id="aAmber" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 Z" fill="#FFC46B"/></marker>
+    <marker id="aViolet" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 Z" fill="#8B6CFF"/></marker>
+    <marker id="aGray" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 Z" fill="#8693A8"/></marker>
+    <style>
+      .t{fill:#EAEEF6}.m{fill:#98A2B5}.f{fill:#646E81}
+      .mono{font-family:'JetBrains Mono', ui-monospace, SFMono-Regular, monospace}
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1140" height="700" rx="18" fill="#0B0E15"/>
+  <rect x="0" y="0" width="1140" height="700" rx="18" fill="url(#grid)"/>
+  <rect x="0.5" y="0.5" width="1139" height="699" rx="18" fill="none" stroke="#1C2230"/>
+
+  <!-- title -->
+  <text x="40" y="50" font-size="27" font-weight="800" letter-spacing="-0.5"><tspan fill="url(#title)">Scribely</tspan><tspan class="m" font-size="18" font-weight="600" dx="10">· System Architecture</tspan></text>
+  <text x="41" y="74" class="mono m" font-size="11.5" letter-spacing="0.5">Local-first desktop app · macOS + Windows · bring-your-own Ollama</text>
+
+  <!-- legend -->
+  <line x1="836" y1="44" x2="868" y2="44" stroke="url(#spec)" stroke-width="2.5" marker-end="url(#aCyan)"/>
+  <text x="876" y="48" class="mono m" font-size="10.5">signal / data path</text>
+  <line x1="836" y1="66" x2="868" y2="66" stroke="#8693A8" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#aGray)"/>
+  <text x="876" y="70" class="mono m" font-size="10.5">control · IPC · config</text>
+
+  <!-- ===== TAURI SHELL + UI ===== -->
+  <rect x="206" y="92" width="672" height="86" rx="15" fill="#0E1320" stroke="#3A2E4D"/>
+  <text x="224" y="112" class="mono" font-size="9.5" letter-spacing="1.4" fill="#B59CFF">TAURI SHELL · Rust · native window · tray · auto-update</text>
+  <rect x="822" y="99" width="40" height="16" rx="4" fill="rgba(255,126,107,.10)" stroke="rgba(255,126,107,.45)"/>
+  <text x="842" y="111" text-anchor="middle" class="mono" font-size="9" fill="#FF9E8F">RS</text>
+
+  <rect x="222" y="122" width="640" height="48" rx="11" fill="#141925" stroke="#2A3242" filter="url(#soft)"/>
+  <rect x="222" y="122" width="640" height="3" rx="1.5" fill="#3FE0D0"/>
+  <text x="240" y="142" class="t" font-size="14" font-weight="700">Desktop UI</text>
+  <text x="240" y="159" class="mono m" font-size="9.5">React · TypeScript · Tailwind · Framer Motion · live transcript / notes editor</text>
+  <rect x="822" y="135" width="32" height="16" rx="4" fill="rgba(63,224,208,.10)" stroke="rgba(63,224,208,.45)"/>
+  <text x="838" y="147" text-anchor="middle" class="mono" font-size="9" fill="#3FE0D0">TS</text>
+
+  <!-- UI <-> backend -->
+  <line x1="542" y1="178" x2="542" y2="208" stroke="#8693A8" stroke-width="1.7" stroke-dasharray="4 4" marker-start="url(#aGray)" marker-end="url(#aGray)"/>
+  <text x="554" y="197" class="mono m" font-size="9.5">WebSocket · live transcript + note ops</text>
+
+  <!-- ===== BACKEND CONTAINER ===== -->
+  <rect x="188" y="208" width="716" height="272" rx="16" fill="#0F131C" stroke="#283041" stroke-dasharray="2 5"/>
+  <text x="206" y="232" class="mono f" font-size="10.5" letter-spacing="1.4">BACKEND CORE · Python — FastAPI + asyncio · Tauri sidecar</text>
+  <rect x="846" y="221" width="36" height="16" rx="4" fill="rgba(70,162,255,.10)" stroke="rgba(70,162,255,.45)"/>
+  <text x="864" y="233" text-anchor="middle" class="mono" font-size="9" fill="#7FC0FF">PY</text>
+
+  <!-- external system audio -->
+  <rect x="36" y="306" width="128" height="78" rx="13" fill="#141925" stroke="#8B6CFF" stroke-dasharray="3 4" filter="url(#soft)"/>
+  <text x="100" y="338" text-anchor="middle" class="t" font-size="12.5" font-weight="700">System audio</text>
+  <text x="100" y="357" text-anchor="middle" class="mono m" font-size="9">browser / video</text>
+  <text x="100" y="371" text-anchor="middle" class="mono m" font-size="9">player output</text>
+  <line x1="164" y1="345" x2="208" y2="345" stroke="#8B6CFF" stroke-width="2.4" marker-end="url(#aViolet)"/>
+
+  <!-- ===== STAGES ===== -->
+  <!-- 01 -->
+  <rect x="208" y="288" width="110" height="114" rx="12" fill="#161B27" stroke="#2A3242" filter="url(#soft)"/>
+  <rect x="208" y="288" width="110" height="3" rx="1.5" fill="#8B6CFF"/>
+  <text x="220" y="312" class="mono" font-size="10" fill="#8B6CFF">01</text>
+  <text x="220" y="334" class="t" font-size="13.5" font-weight="700">Capture</text>
+  <text x="220" y="356" class="mono m" font-size="9">WASAPI · Win</text>
+  <text x="220" y="370" class="mono m" font-size="9">ScreenCaptureKit</text>
+  <text x="220" y="384" class="mono m" font-size="9">· Mac</text>
+  <!-- 02 -->
+  <rect x="349.5" y="288" width="110" height="114" rx="12" fill="#161B27" stroke="#2A3242" filter="url(#soft)"/>
+  <rect x="349.5" y="288" width="110" height="3" rx="1.5" fill="#46A2FF"/>
+  <text x="361.5" y="312" class="mono" font-size="10" fill="#46A2FF">02</text>
+  <text x="361.5" y="334" class="t" font-size="13.5" font-weight="700">Transcribe</text>
+  <text x="361.5" y="356" class="mono m" font-size="9">faster-whisper</text>
+  <text x="361.5" y="370" class="mono m" font-size="9">live · streaming</text>
+  <text x="361.5" y="384" class="mono m" font-size="9">timestamped</text>
+  <!-- 03 -->
+  <rect x="491" y="288" width="110" height="114" rx="12" fill="#161B27" stroke="#2A3242" filter="url(#soft)"/>
+  <rect x="491" y="288" width="110" height="3" rx="1.5" fill="#3FE0D0"/>
+  <text x="503" y="312" class="mono" font-size="10" fill="#3FE0D0">03</text>
+  <text x="503" y="334" class="t" font-size="13.5" font-weight="700">Session</text>
+  <text x="503" y="349" class="t" font-size="13.5" font-weight="700">state</text>
+  <text x="503" y="370" class="mono m" font-size="9">rolling buffer</text>
+  <text x="503" y="384" class="mono m" font-size="9">→ SQLite (WAL)</text>
+  <!-- 04 -->
+  <rect x="632.5" y="288" width="110" height="114" rx="12" fill="#161B27" stroke="#2A3242" filter="url(#soft)"/>
+  <rect x="632.5" y="288" width="110" height="3" rx="1.5" fill="#67E8B0"/>
+  <text x="644.5" y="312" class="mono" font-size="10" fill="#67E8B0">04</text>
+  <text x="644.5" y="334" class="t" font-size="13.5" font-weight="700">Notes</text>
+  <text x="644.5" y="349" class="t" font-size="13.5" font-weight="700">pipeline</text>
+  <text x="644.5" y="370" class="mono m" font-size="9">LangGraph ·</text>
+  <text x="644.5" y="384" class="mono m" font-size="9">langchain-ollama</text>
+  <text x="644.5" y="396" class="mono m" font-size="9">+ Pydantic</text>
+  <!-- 05 -->
+  <rect x="774" y="288" width="110" height="114" rx="12" fill="#161B27" stroke="#2A3242" filter="url(#soft)"/>
+  <rect x="774" y="288" width="110" height="3" rx="1.5" fill="#FFC46B"/>
+  <text x="786" y="312" class="mono" font-size="10" fill="#FFC46B">05</text>
+  <text x="786" y="334" class="t" font-size="13.5" font-weight="700">Export</text>
+  <text x="786" y="356" class="mono m" font-size="9">Jinja2 → HTML</text>
+  <text x="786" y="370" class="mono m" font-size="9">beautified ·</text>
+  <text x="786" y="384" class="mono m" font-size="9">shareable</text>
+
+  <!-- signal arrows -->
+  <line x1="318" y1="345" x2="349.5" y2="345" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aCyan)"/>
+  <line x1="459.5" y1="345" x2="491" y2="345" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aCyan)"/>
+  <line x1="601" y1="345" x2="632.5" y2="345" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aCyan)"/>
+  <line x1="742.5" y1="345" x2="774" y2="345" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aAmber)"/>
+
+  <!-- Ollama -->
+  <rect x="944" y="408" width="164" height="74" rx="13" fill="#141925" stroke="#67E8B0" stroke-dasharray="3 4" filter="url(#soft)"/>
+  <text x="1026" y="436" text-anchor="middle" class="t" font-size="13" font-weight="700">Ollama</text>
+  <text x="1026" y="454" text-anchor="middle" class="mono m" font-size="9">user-provided · gemma4:12b</text>
+  <text x="1026" y="468" text-anchor="middle" class="mono f" font-size="9">configurable host + model</text>
+  <path d="M687.5,402 L687.5,445 L944,445" fill="none" stroke="#8693A8" stroke-width="1.7" stroke-dasharray="4 4" marker-start="url(#aGray)" marker-end="url(#aGray)"/>
+  <text x="700" y="437" class="mono m" font-size="9.5">/api/chat · structured output (Pydantic)</text>
+
+  <!-- Persistence -->
+  <rect x="188" y="548" width="340" height="82" rx="14" fill="#141925" stroke="#2A3242" filter="url(#soft)"/>
+  <text x="208" y="574" class="mono f" font-size="10" letter-spacing="1.4">PERSISTENCE</text>
+  <text x="208" y="596" class="t" font-size="13" font-weight="700">SQLite (WAL) + filesystem</text>
+  <text x="208" y="615" class="mono m" font-size="9">sessions · transcripts · notes · checkpoints · exports</text>
+  <path d="M340,548 L546,402" fill="none" stroke="#8693A8" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#aGray)" opacity="0.85"/>
+  <path d="M470,548 L687.5,402" fill="none" stroke="#8693A8" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#aGray)" opacity="0.85"/>
+
+  <!-- Config -->
+  <rect x="548" y="548" width="356" height="82" rx="14" fill="#141925" stroke="#2A3242" filter="url(#soft)"/>
+  <text x="568" y="574" class="mono f" font-size="10" letter-spacing="1.4">CONFIG</text>
+  <text x="568" y="596" class="t" font-size="13" font-weight="700">config.toml</text>
+  <text x="568" y="615" class="mono m" font-size="9">pydantic-settings · ollama host/model · chunk size · paths</text>
+  <path d="M700,548 L700,480" fill="none" stroke="#8693A8" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#aGray)" opacity="0.85"/>
+  <path d="M852,548 L852,464 L944,452" fill="none" stroke="#8693A8" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#aGray)" opacity="0.85"/>
+
+  <!-- Output -->
+  <rect x="944" y="548" width="164" height="82" rx="14" fill="#141925" stroke="#FFC46B" filter="url(#soft)"/>
+  <rect x="944" y="548" width="164" height="3" rx="1.5" fill="#FFC46B"/>
+  <text x="1026" y="584" text-anchor="middle" class="t" font-size="13.5" font-weight="700">HTML notes</text>
+  <text x="1026" y="604" text-anchor="middle" class="mono m" font-size="9">beautified · shareable file</text>
+  <text x="1026" y="618" text-anchor="middle" class="mono f" font-size="9">timestamps link to video</text>
+  <path d="M884,345 L914,345 L914,589 L944,589" fill="none" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aAmber)"/>
+
+  <!-- footnote + lang key -->
+  <text x="40" y="676" class="mono f" font-size="9.5">Live transcription during playback · model runs once after stop · local by default      ·      TS TypeScript · PY Python · RS Rust (Tauri shell)</text>
+</svg>
+</div>
+</body>
+</html>
