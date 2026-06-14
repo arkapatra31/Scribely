@@ -1,0 +1,140 @@
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+*.egg-link
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# uv — uv.lock is committed for reproducible installs (app, not library)
+
+# Type checking / linting
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# PyInstaller / Briefcase (sidecar packaging)
+*.spec
+*.manifest
+dist-bin/
+.briefcase/
+*.app/           # macOS app bundles produced by Briefcase
+*.exe
+
+# ─── Rust / Tauri ─────────────────────────────────────────────────────────────
+target/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/WixTools/
+
+# Tauri build artefacts
+apps/desktop/src-tauri/gen/
+*.deb
+*.rpm
+*.AppImage
+*.dmg
+*.pkg
+*.msi
+*.nsis
+
+# ─── Node / TypeScript / React ────────────────────────────────────────────────
+node_modules/
+apps/desktop/node_modules/
+
+# pnpm
+.pnpm-store/
+pnpm-debug.log*
+
+# Build output
+apps/desktop/dist/
+apps/desktop/build/
+apps/desktop/.vite/
+
+# TypeScript generated types (regenerated via pnpm gen:schemas)
+shared/schemas/*.ts
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── SQLite ───────────────────────────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.db
+*.db-shm
+*.db-wal
+
+# ─── Config / secrets ─────────────────────────────────────────────────────────
+# Keep config.toml.example in the repo; ignore user-edited copies
+config.toml
+config.local.toml
+.env
+.env.*
+!.env.example
+
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# ─── Windows ──────────────────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ─── IDE / editors ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+# structlog / app runtime logs
+logs/
+*.structlog
+
+# Ollama model cache (never commit model weights)
+.ollama/
+
+# LangGraph / LangChain checkpoints written to disk
+checkpoints/
+langchain_cache/
+
+# platformdirs app-data written during dev runs
+app_data/
+
+# Jinja2 compiled template cache
+__jinja2_cache__/

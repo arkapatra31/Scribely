@@ -12,7 +12,7 @@ These shape the whole design. Do not violate them without explicit instruction.
 
 1. **Live transcription, deferred generation.** Speech-to-text runs continuously *during* playback. The LLM (notes pipeline) runs **once, after the user stops** the session — never per-chunk during recording.
 2. **Local-first & free.** Audio, transcripts, and notes stay on the user's machine. No cloud dependency, no per-minute costs, no usage caps. Cloud is an opt-in only, never the default path.
-3. **Model-agnostic / config-driven.** The LLM is a config value, not a hard dependency. Never hardcode a model. Default is `gemma4:12b` on a **user-provided Ollama** instance. Validate the host + model on startup (`GET /api/tags`) and surface a clear error if the model isn't pulled.
+3. **Model-agnostic / config-driven.** The LLM is a config value, not a hard dependency. Never hardcode a model or provider. Primary provider is **Azure OpenAI** (`gpt-4o` by default). Supported providers: `azure_openai`, `openai`, `gemini`, `ollama`. A `llm_factory.py` module resolves the correct LangChain `Chat*` class from config — no other code changes required to switch. For Ollama, validate the host + model on startup (`GET /api/tags`) and surface a clear error if the model isn't pulled.
 4. **No telemetry by default.** Nothing leaves the machine unless the user explicitly opts in.
 5. **Don't overflow context.** Read each model's context window and chunk transcripts with map-reduce so a long lecture never exceeds it.
 
@@ -29,8 +29,8 @@ These shape the whole design. Do not violate them without explicit instruction.
 | Audio capture | WASAPI loopback (Windows) · ScreenCaptureKit (macOS) · `sounddevice` · VAD |
 | Transcription (STT) | `faster-whisper` (CTranslate2), chunked streaming |
 | Session state | SQLite (WAL mode) + in-memory rolling window for live display |
-| Notes pipeline | LangGraph + `langchain-ollama` + Pydantic structured output |
-| Model runtime | Ollama (user-provided), default `gemma4:12b` |
+| Notes pipeline | LangGraph + `langchain-openai` + Pydantic structured output |
+| Model runtime | **Azure OpenAI** (default, `gpt-4o`); `openai`, `gemini` (`langchain-google-genai`), and Ollama (`langchain-ollama`) supported via config |
 | Export | Jinja2 → HTML (WeasyPrint → PDF later) |
 | Persistence | SQLite (WAL) + filesystem, via `platformdirs` |
 | Config | TOML via `pydantic-settings` |
@@ -68,7 +68,7 @@ scribely/
 - **Schemas are the contract.** Define everything that crosses the WS boundary (transcript segments, note docs, session objects) as Pydantic models in `backend/scribely/models.py`, and **generate the TypeScript types from them** (e.g. `pydantic2ts`). Frontend never hand-writes these types.
 - **Python:** type-hinted throughout; `ruff` for lint/format, `mypy` for types, `pytest` for tests. Async-first in the API and capture loops.
 - **TypeScript:** strict mode on. Tailwind for styling; Framer Motion for transitions. Keep WS message handling in one typed client module.
-- **Notes pipeline:** the LLM call uses `ChatOllama(model=<config>, base_url=<config>)` with `.with_structured_output(<PydanticModel>)`. Each LangGraph node is pure and re-runnable; persist a checkpoint (SQLite) so `summarize` / `restructure` can re-run without redoing `structure`.
+- **Notes pipeline:** the LLM call uses `llm_factory.get_llm(cfg)` which returns the appropriate `Chat*` instance (e.g. `AzureChatOpenAI`, `ChatOpenAI`, `ChatGoogleGenerativeAI`, `ChatOllama`) based on `config.toml`. All nodes call `.with_structured_output(<PydanticModel>)` — this API is identical across providers. Each LangGraph node is pure and re-runnable; persist a checkpoint (SQLite) so `summarize` / `restructure` can re-run without redoing `structure`.
 - **Config:** read host, model, chunk size, temperature, and paths from `config.toml`. Never hardcode. Changing the model must require no code change.
 - **Errors are actionable.** Surface plain-language problems ("model `gemma4:12b` not found — run `ollama pull gemma4:12b`"), not stack traces, to the UI.
 
