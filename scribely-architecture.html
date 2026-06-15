@@ -48,7 +48,7 @@
 
   <!-- title -->
   <text x="40" y="50" font-size="27" font-weight="800" letter-spacing="-0.5"><tspan fill="url(#title)">Scribely</tspan><tspan class="m" font-size="18" font-weight="600" dx="10">· System Architecture</tspan></text>
-  <text x="41" y="74" class="mono m" font-size="11.5" letter-spacing="0.5">Local-first desktop app · macOS + Windows · bring-your-own Ollama</text>
+  <text x="41" y="74" class="mono m" font-size="11.5" letter-spacing="0.5">Local-first desktop app · macOS + Windows · Azure OpenAI default · Ollama / OpenAI / Gemini via config</text>
 
   <!-- legend -->
   <line x1="836" y1="44" x2="868" y2="44" stroke="url(#spec)" stroke-width="2.5" marker-end="url(#aCyan)"/>
@@ -118,8 +118,8 @@
   <text x="644.5" y="334" class="t" font-size="13.5" font-weight="700">Notes</text>
   <text x="644.5" y="349" class="t" font-size="13.5" font-weight="700">pipeline</text>
   <text x="644.5" y="370" class="mono m" font-size="9">LangGraph ·</text>
-  <text x="644.5" y="384" class="mono m" font-size="9">langchain-ollama</text>
-  <text x="644.5" y="396" class="mono m" font-size="9">+ Pydantic</text>
+  <text x="644.5" y="384" class="mono m" font-size="9">llm_factory ·</text>
+  <text x="644.5" y="396" class="mono m" font-size="9">langchain-openai</text>
   <!-- 05 -->
   <rect x="774" y="288" width="110" height="114" rx="12" fill="#161B27" stroke="#2A3242" filter="url(#soft)"/>
   <rect x="774" y="288" width="110" height="3" rx="1.5" fill="#FFC46B"/>
@@ -135,13 +135,13 @@
   <line x1="601" y1="345" x2="632.5" y2="345" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aCyan)"/>
   <line x1="742.5" y1="345" x2="774" y2="345" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aAmber)"/>
 
-  <!-- Ollama -->
+  <!-- LLM Provider -->
   <rect x="944" y="408" width="164" height="74" rx="13" fill="#141925" stroke="#67E8B0" stroke-dasharray="3 4" filter="url(#soft)"/>
-  <text x="1026" y="436" text-anchor="middle" class="t" font-size="13" font-weight="700">Ollama</text>
-  <text x="1026" y="454" text-anchor="middle" class="mono m" font-size="9">user-provided · gemma4:12b</text>
-  <text x="1026" y="468" text-anchor="middle" class="mono f" font-size="9">configurable host + model</text>
+  <text x="1026" y="430" text-anchor="middle" class="t" font-size="13" font-weight="700">LLM Provider</text>
+  <text x="1026" y="448" text-anchor="middle" class="mono m" font-size="9">Azure OpenAI · gpt-4o (default)</text>
+  <text x="1026" y="462" text-anchor="middle" class="mono f" font-size="9">openai · gemini · ollama via config</text>
   <path d="M687.5,402 L687.5,445 L944,445" fill="none" stroke="#8693A8" stroke-width="1.7" stroke-dasharray="4 4" marker-start="url(#aGray)" marker-end="url(#aGray)"/>
-  <text x="700" y="437" class="mono m" font-size="9.5">/api/chat · structured output (Pydantic)</text>
+  <text x="700" y="437" class="mono m" font-size="9.5">llm_factory · LangChain Chat* · structured output</text>
 
   <!-- Persistence -->
   <rect x="188" y="548" width="340" height="82" rx="14" fill="#141925" stroke="#2A3242" filter="url(#soft)"/>
@@ -155,7 +155,7 @@
   <rect x="548" y="548" width="356" height="82" rx="14" fill="#141925" stroke="#2A3242" filter="url(#soft)"/>
   <text x="568" y="574" class="mono f" font-size="10" letter-spacing="1.4">CONFIG</text>
   <text x="568" y="596" class="t" font-size="13" font-weight="700">config.toml</text>
-  <text x="568" y="615" class="mono m" font-size="9">pydantic-settings · ollama host/model · chunk size · paths</text>
+  <text x="568" y="615" class="mono m" font-size="9">pydantic-settings · provider · model · chunk size · paths</text>
   <path d="M700,548 L700,480" fill="none" stroke="#8693A8" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#aGray)" opacity="0.85"/>
   <path d="M852,548 L852,464 L944,452" fill="none" stroke="#8693A8" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#aGray)" opacity="0.85"/>
 
