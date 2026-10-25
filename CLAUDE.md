@@ -58,7 +58,8 @@ Scribely/                 # repo root
     tests/
   shared/
     schemas/              # TypeScript types generated from Pydantic
-  config.toml             # default user-editable config
+  config.toml.example     # documented defaults; copy to config.toml (gitignored)
+  package.json            # pnpm workspace root (gen:schemas, dev, build)
   CLAUDE.md
   PLAN.md
 ```
@@ -66,10 +67,11 @@ Scribely/                 # repo root
 ## Conventions
 
 - **Schemas are the contract.** Define everything that crosses the WS boundary (transcript segments, note docs, session objects) as Pydantic models in `backend/scribely/models.py`, and **generate the TypeScript types from them** (e.g. `pydantic2ts`). Frontend never hand-writes these types.
+- **Python environment:** dependencies are managed only by `uv` in the isolated `backend/.venv` (`uv add`, `uv add --dev`, `uv sync`; `uv.lock` committed). Never `pip install` into the global/system Python.
 - **Python:** type-hinted throughout; `ruff` for lint/format, `mypy` for types, `pytest` for tests. Async-first in the API and capture loops.
 - **TypeScript:** strict mode on. Tailwind for styling; Framer Motion for transitions. Keep WS message handling in one typed client module.
 - **Notes pipeline:** the LLM call uses `llm_factory.get_llm(cfg)` which returns the appropriate `Chat*` instance (e.g. `AzureChatOpenAI`, `ChatAnthropic`, `ChatOpenAI`, `ChatGoogleGenerativeAI`, `ChatOllama`) based on `config.toml`. All nodes call `.with_structured_output(<PydanticModel>)` — this API is identical across providers. Each LangGraph node is pure and re-runnable; persist a checkpoint (SQLite) so `summarize` / `restructure` can re-run without redoing `structure`.
-- **Config:** read host, model, chunk size, temperature, and paths from `config.toml`. Never hardcode. Changing the model must require no code change.
+- **Config:** read host, model, chunk size, temperature, and paths from `config.toml` (precedence: defaults < `config.toml` < `SCRIBELY_<SECTION>__<KEY>` env vars). API keys only via the providers' standard env vars, never in config. Never hardcode. Changing the model must require no code change.
 - **Errors are actionable.** Surface plain-language problems ("model `gemma4:12b` not found — run `ollama pull gemma4:12b`"), not stack traces, to the UI.
 
 ## Git workflow
@@ -78,22 +80,21 @@ Scribely/                 # repo root
 - **Branch naming:** `<type>/<short-kebab-case-description>`. Types: `feature`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`. Examples: `feature/wasapi-capture`, `fix/ws-reconnect`, `docs/multi-provider-llm`.
 - One branch per logical change; keep branches short-lived.
 
-## Intended commands (set up in Phase 0)
+## Commands
 
 ```bash
-# backend (Python)
-uv sync                       # or poetry install
-uv run scribely-backend       # start FastAPI sidecar
-pytest                        # tests
-ruff check . && mypy .        # lint + types
+# backend (Python) — run from backend/; uv manages the isolated backend/.venv
+uv sync                                   # create/update .venv from uv.lock
+uv run scribely-backend                   # start FastAPI sidecar (127.0.0.1:8765)
+uv run pytest                             # tests
+uv run ruff check . && uv run ruff format --check . && uv run mypy .   # lint + format + types
 
-# frontend / shell (from apps/desktop)
+# workspace (TypeScript + Tauri) — run from repo root
 pnpm install
-pnpm tauri dev                # run the desktop app in dev
-pnpm tauri build              # produce signed installers
-
-# regenerate TS types from Pydantic
-pnpm gen:schemas
+pnpm gen:schemas                          # regenerate shared/schemas/models.ts from Pydantic
+pnpm typecheck                            # gen:schemas + tsc across workspace
+pnpm dev                                  # pnpm tauri dev for apps/desktop
+pnpm build                                # pnpm tauri build (installers)
 ```
 
 ## Gotchas to respect
