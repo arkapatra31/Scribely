@@ -7,7 +7,7 @@ the frontend never hand-writes them.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -70,3 +70,91 @@ class NoteDoc(Schema):
     title: str = Field(description="Title describing the whole session.")
     summary: str = Field(description="A few sentences summarising the session.")
     sections: list[NoteSection] = Field(description="Note sections in chronological order.")
+
+
+# --- WebSocket protocol (/ws) ------------------------------------------------------------
+# Every message is a JSON object with a "type" discriminator.
+
+BackendState = Literal["idle", "loading_model", "recording", "stopping"]
+ErrorCode = Literal[
+    "capture_permission",
+    "capture_failed",
+    "model_failed",
+    "already_recording",
+    "not_recording",
+    "bad_message",
+    "internal",
+]
+
+
+class StartCommand(Schema):
+    """Client -> server: start a recording session."""
+
+    type: Literal["start"]
+    title: str | None = None
+
+
+class StopCommand(Schema):
+    """Client -> server: stop the current session."""
+
+    type: Literal["stop"]
+
+
+class StatusMessage(Schema):
+    """Server -> client: backend state; sent on connect and on every change."""
+
+    type: Literal["status"]
+    state: BackendState
+    session: Session | None = None
+    model: str = Field(description="Configured speech model name.")
+
+
+class TranscriptSnapshot(Schema):
+    """Server -> client: final segments of the current/last session, sent on connect."""
+
+    type: Literal["transcript_snapshot"]
+    segments: list[TranscriptSegment]
+
+
+class TranscriptPartialMessage(Schema):
+    """Server -> client: live hypothesis for in-progress speech; replaced by later messages."""
+
+    type: Literal["transcript_partial"]
+    session_id: str
+    start: float
+    end: float
+    text: str
+
+
+class TranscriptFinalMessage(Schema):
+    """Server -> client: a finished transcript segment."""
+
+    type: Literal["transcript_final"]
+    segment: TranscriptSegment
+
+
+class ErrorMessage(Schema):
+    """Server -> client: a plain-language problem to show the user."""
+
+    type: Literal["error"]
+    code: ErrorCode
+    message: str
+
+
+ClientMessage = Annotated[StartCommand | StopCommand, Field(discriminator="type")]
+ServerMessage = Annotated[
+    StatusMessage
+    | TranscriptSnapshot
+    | TranscriptPartialMessage
+    | TranscriptFinalMessage
+    | ErrorMessage,
+    Field(discriminator="type"),
+]
+
+
+class WsProtocol(Schema):
+    """Never sent. Exists so the generated TypeScript includes the message unions:
+    use ``WsProtocol["client"]`` / ``WsProtocol["server"]`` on the frontend."""
+
+    client: ClientMessage
+    server: ServerMessage
