@@ -17,6 +17,8 @@
 [server]
 host = "127.0.0.1"   # keep on loopback: the sidecar is local-only
 port = 8765
+# Browser origins allowed to open the /ws WebSocket (Tauri webview + Vite dev server).
+allowed_origins = ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost", "http://localhost:1420", "http://127.0.0.1:1420"]
 
 [capture]
 backend = "auto"            # auto | wasapi (Windows) | screencapturekit (macOS) | file

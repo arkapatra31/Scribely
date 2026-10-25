@@ -1,0 +1,192 @@
+import asyncio
+import threading
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pytest
+
+from scribely.capture.base import AudioCapture, CaptureError, CapturePermissionError
+from scribely.capture.dsp import TARGET_SAMPLE_RATE as SR
+from scribely.capture.file import FileCapture
+from scribely.config import Settings, SttConfig
+from scribely.models import (
+    ErrorMessage,
+    ServerMessage,
+    StatusMessage,
+    TranscriptFinalMessage,
+)
+from scribely.session import LiveSessionManager, SessionError
+from scribely.stt import STTError
+from tests.audio import write_wav
+from tests.stt_fakes import EnergyVAD, LoadableFakeTranscriber, quiet, tone
+
+LECTURE = np.concatenate([quiet(0.3), tone(1.0), quiet(1.0), tone(0.5), quiet(0.8)])
+
+
+def make_manager(
+    capture_factory: Callable[[], AudioCapture],
+    transcriber: LoadableFakeTranscriber | None = None,
+) -> LiveSessionManager:
+    return LiveSessionManager(
+        Settings(stt=SttConfig(partial_interval_seconds=0)),
+        transcriber=transcriber or LoadableFakeTranscriber(),
+        capture_factory=capture_factory,
+        vad_factory=EnergyVAD,
+    )
+
+
+def file_capture(
+    tmp_path: Path, audio: Any = LECTURE, realtime: bool = False
+) -> Callable[[], AudioCapture]:
+    path = write_wav(tmp_path / "lecture.wav", audio, SR)
+    return lambda: FileCapture(path, realtime=realtime)
+
+
+def drain(queue: asyncio.Queue[ServerMessage]) -> list[ServerMessage]:
+    out = []
+    while not queue.empty():
+        out.append(queue.get_nowait())
+    return out
+
+
+async def wait_idle(manager: LiveSessionManager, timeout: float = 5.0) -> None:
+    async with asyncio.timeout(timeout):
+        while manager.state != "idle":
+            await asyncio.sleep(0.01)
+
+
+class FailingCapture(AudioCapture):
+    """Delivers a second of speech, then reports a device failure."""
+
+    name = "failing"
+
+    async def _open(self) -> None:
+        def run() -> None:
+            self._push(tone(1.0), SR)
+            self._fail(CaptureError("Your output device was disconnected."))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    async def _close(self) -> None:
+        pass
+
+
+class DeniedCapture(AudioCapture):
+    name = "denied"
+
+    async def _open(self) -> None:
+        raise CapturePermissionError("Grant Screen & System Audio Recording permission.")
+
+    async def _close(self) -> None:
+        pass
+
+
+def test_session_streams_segments_and_ends_with_source(tmp_path: Path) -> None:
+    async def run() -> list[ServerMessage]:
+        manager = make_manager(file_capture(tmp_path))
+        queue = manager.subscribe()
+        session = await manager.start("Lecture 1")
+        assert session.status == "recording" and session.title == "Lecture 1"
+        await wait_idle(manager)
+        return drain(queue)
+
+    messages = asyncio.run(run())
+    finals = [m for m in messages if isinstance(m, TranscriptFinalMessage)]
+    assert [f.segment.text for f in finals] == ["speech 1.0s", "speech 0.5s"]
+    assert [f.segment.index for f in finals] == [0, 1]
+    states = [m.state for m in messages if isinstance(m, StatusMessage)]
+    assert states[0] == "idle" and "recording" in states and states[-1] == "idle"
+    last = [m for m in messages if isinstance(m, StatusMessage)][-1]
+    assert last.session is not None and last.session.status == "stopped"
+    assert last.session.ended_at is not None
+
+
+def test_stop_drains_and_marks_stopped(tmp_path: Path) -> None:
+    async def run() -> tuple[str, list[ServerMessage]]:
+        manager = make_manager(
+            file_capture(tmp_path, np.concatenate([tone(0.6), quiet(30)]), realtime=True)
+        )
+        queue = manager.subscribe()
+        await manager.start()
+        await asyncio.sleep(1.5)
+        session = await manager.stop()
+        return session.status, drain(queue)
+
+    status, messages = asyncio.run(run())
+    assert status == "stopped"
+    assert any(isinstance(m, TranscriptFinalMessage) for m in messages)
+
+
+def test_double_start_and_idle_stop_are_rejected(tmp_path: Path) -> None:
+    async def run() -> None:
+        manager = make_manager(file_capture(tmp_path, quiet(30), realtime=True))
+        with pytest.raises(SessionError) as exc:
+            await manager.stop()
+        assert exc.value.code == "not_recording"
+        await manager.start()
+        with pytest.raises(SessionError) as exc:
+            await manager.start()
+        assert exc.value.code == "already_recording"
+        await manager.stop()
+
+    asyncio.run(run())
+
+
+def test_model_failure_is_reported_and_retryable(tmp_path: Path) -> None:
+    transcriber = LoadableFakeTranscriber(load_error=STTError('Unknown speech model "x".'))
+
+    async def run() -> None:
+        manager = make_manager(file_capture(tmp_path), transcriber)
+        with pytest.raises(SessionError) as exc:
+            await manager.start()
+        assert exc.value.code == "model_failed"
+        assert "Unknown speech model" in exc.value.message
+        assert manager.state == "idle"
+        transcriber.load_error = None
+        await manager.start()
+        await wait_idle(manager)
+
+    asyncio.run(run())
+    assert transcriber.loads == 2
+
+
+def test_permission_denied_at_start(tmp_path: Path) -> None:
+    async def run() -> None:
+        manager = make_manager(DeniedCapture)
+        with pytest.raises(SessionError) as exc:
+            await manager.start()
+        assert exc.value.code == "capture_permission"
+        assert manager.state == "idle"
+
+    asyncio.run(run())
+
+
+def test_capture_failure_mid_session_fails_session(tmp_path: Path) -> None:
+    async def run() -> list[ServerMessage]:
+        manager = make_manager(FailingCapture)
+        queue = manager.subscribe()
+        await manager.start()
+        await wait_idle(manager)
+        return drain(queue)
+
+    messages = asyncio.run(run())
+    errors = [m for m in messages if isinstance(m, ErrorMessage)]
+    assert errors and errors[0].code == "capture_failed"
+    assert "disconnected" in errors[0].message
+    last = [m for m in messages if isinstance(m, StatusMessage)][-1]
+    assert last.state == "idle" and last.session is not None and last.session.status == "failed"
+
+
+def test_new_subscriber_gets_last_session_snapshot(tmp_path: Path) -> None:
+    async def run() -> list[ServerMessage]:
+        manager = make_manager(file_capture(tmp_path))
+        await manager.start()
+        await wait_idle(manager)
+        return drain(manager.subscribe())
+
+    status, snapshot = asyncio.run(run())
+    assert isinstance(status, StatusMessage) and status.session is not None
+    assert snapshot.type == "transcript_snapshot"
+    assert [s.text for s in snapshot.segments] == ["speech 1.0s", "speech 0.5s"]

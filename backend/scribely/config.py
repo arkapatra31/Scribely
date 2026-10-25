@@ -46,6 +46,14 @@ class _Section(BaseModel):
 class ServerConfig(_Section):
     host: str = "127.0.0.1"
     port: int = Field(default=8765, ge=1, le=65535)
+    # Browser origins allowed to open /ws: the Tauri webview (macOS, Windows) and Vite dev.
+    allowed_origins: list[str] = [
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+    ]
 
 
 class CaptureConfig(_Section):

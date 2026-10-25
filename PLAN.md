@@ -38,6 +38,8 @@ The hardest, most platform-specific piece — de-risk it early.
 
 ---
 
+> **Build-order change:** a thin live slice (4.2 WebSocket + 5.2 live transcript view, with an in-memory session manager) was built before Phase 3 so the app is usable end to end early. Phase 3 persistence plugs into that session manager.
+
 ## Phase 3 · Session state & persistence
 
 - **3.1 SQLite (WAL)** — schema for sessions, transcript segments, notes, checkpoints; `platformdirs` location.
@@ -49,7 +51,7 @@ The hardest, most platform-specific piece — de-risk it early.
 ## Phase 4 · Backend core & live transport
 
 - **4.1 FastAPI sidecar** — process lifecycle, health, startup validation of the configured LLM provider (credentials present for `azure_openai` / `anthropic` / `openai` / `gemini`; host + model via `/api/tags` for `ollama`).
-- **4.2 WebSocket** — push live transcript segments to the client; accept control messages (start/stop, note ops).
+- **4.2 WebSocket** — push live transcript segments to the client; accept control messages (start/stop, note ops). ✅ `/ws` with start/stop, status, partial/final segments, errors; Origin allowlist.
   - D: 2.2, 3.2 · DoD: a WS client receives transcript segments in real time and can start/stop a session.
 
 ---
@@ -57,7 +59,7 @@ The hardest, most platform-specific piece — de-risk it early.
 ## Phase 5 · Desktop shell + live UI  ← first end-to-end slice
 
 - **5.1 Tauri shell** — native window, tray, and **launching/supervising the Python sidecar**.
-- **5.2 Live transcript view** — typed WS client; record/pause/stop controls; streaming transcript; recording indicator + timer.
+- **5.2 Live transcript view** — typed WS client; record/pause/stop controls; streaming transcript; recording indicator + timer. ✅ record/stop (pause later), live partials, offline/error banners.
   - D: 4.2 · DoD: **vertical slice works** — open app → record → watch live transcript stream from real captured audio → stop. (No notes yet.)
 
 ---
