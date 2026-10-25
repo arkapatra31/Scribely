@@ -40,7 +40,7 @@ These shape the whole design. Do not violate them without explicit instruction.
 ## Proposed repository layout
 
 ```
-scribely/
+Scribely/                 # repo root
   apps/
     desktop/              # Tauri + React + TypeScript
       src/                # React app (components, views, ws client)
@@ -60,7 +60,7 @@ scribely/
     schemas/              # TypeScript types generated from Pydantic
   config.toml             # default user-editable config
   CLAUDE.md
-  Plan.md
+  PLAN.md
 ```
 
 ## Conventions
@@ -71,6 +71,12 @@ scribely/
 - **Notes pipeline:** the LLM call uses `llm_factory.get_llm(cfg)` which returns the appropriate `Chat*` instance (e.g. `AzureChatOpenAI`, `ChatAnthropic`, `ChatOpenAI`, `ChatGoogleGenerativeAI`, `ChatOllama`) based on `config.toml`. All nodes call `.with_structured_output(<PydanticModel>)` — this API is identical across providers. Each LangGraph node is pure and re-runnable; persist a checkpoint (SQLite) so `summarize` / `restructure` can re-run without redoing `structure`.
 - **Config:** read host, model, chunk size, temperature, and paths from `config.toml`. Never hardcode. Changing the model must require no code change.
 - **Errors are actionable.** Surface plain-language problems ("model `gemma4:12b` not found — run `ollama pull gemma4:12b`"), not stack traces, to the UI.
+
+## Git workflow
+
+- **Never commit directly to `main`.** All work goes on a feature branch, which is merged into `main` via pull request.
+- **Branch naming:** `<type>/<short-kebab-case-description>`. Types: `feature`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`. Examples: `feature/wasapi-capture`, `fix/ws-reconnect`, `docs/multi-provider-llm`.
+- One branch per logical change; keep branches short-lived.
 
 ## Intended commands (set up in Phase 0)
 

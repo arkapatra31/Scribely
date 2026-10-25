@@ -1,4 +1,4 @@
-# Plan.md — Scribely Build Map
+# PLAN.md — Scribely Build Map
 
 A component-by-component plan for building Scribely. Phases are ordered so a **working end-to-end slice exists as early as possible** (Phase 5), then capabilities are layered on. Each component lists its goal, deliverable, what it depends on, and how you know it's done.
 
@@ -12,7 +12,7 @@ Set up the skeleton both languages live in before any feature work.
 
 - **0.1 Repo & tooling** — monorepo layout (`apps/desktop`, `backend`, `shared`), Python env (`uv`/`poetry`, `ruff`, `mypy`, `pytest`), TS env (Tauri + React + Tailwind + strict TS), `pnpm` scripts.
   - DoD: `pnpm tauri dev` opens an empty window; `uv run scribely-backend` starts an empty FastAPI app on localhost.
-- **0.2 Config system** — `config.toml` + `pydantic-settings` loader (ollama host/model, chunk size, temperature, paths via `platformdirs`).
+- **0.2 Config system** — `config.toml` + `pydantic-settings` loader (LLM provider + model, Ollama host, chunk size, temperature, paths via `platformdirs`). Provider API keys come from environment variables, never from committed config.
   - DoD: backend boots reading config; bad/missing values produce clear errors.
 - **0.3 Shared schemas** — Pydantic models in `models.py` for `TranscriptSegment`, `Session`, `NoteSection`, `NoteDoc`; TS type generation wired (`pnpm gen:schemas`).
   - DoD: editing a Pydantic model regenerates matching TS types.
@@ -48,7 +48,7 @@ The hardest, most platform-specific piece — de-risk it early.
 
 ## Phase 4 · Backend core & live transport
 
-- **4.1 FastAPI sidecar** — process lifecycle, health, startup validation of Ollama host/model (`/api/tags`).
+- **4.1 FastAPI sidecar** — process lifecycle, health, startup validation of the configured LLM provider (credentials present for `azure_openai` / `anthropic` / `openai` / `gemini`; host + model via `/api/tags` for `ollama`).
 - **4.2 WebSocket** — push live transcript segments to the client; accept control messages (start/stop, note ops).
   - D: 2.2, 3.2 · DoD: a WS client receives transcript segments in real time and can start/stop a session.
 
@@ -64,10 +64,12 @@ The hardest, most platform-specific piece — de-risk it early.
 
 ## Phase 6 · Notes pipeline (GenAI)
 
+- **6.0 LLM factory** — `llm_factory.get_llm(cfg)` resolves `AzureChatOpenAI` (default, `gpt-4o`), `ChatAnthropic`, `ChatOpenAI`, `ChatGoogleGenerativeAI`, or `ChatOllama` from `config.toml`, plus the model's context window for chunking.
+  - D: 0.2 · DoD: switching provider/model is a config-only change; a misconfigured provider yields a plain-language error.
 - **6.1 LangGraph graph** — state + nodes: `structure` → (`summarize` | `restructure`) → `export`; SQLite checkpointer.
-- **6.2 Structure node** — `ChatOllama` + `.with_structured_output(NoteDoc)`; map-reduce chunking for long transcripts; timestamps preserved.
+- **6.2 Structure node** — `get_llm(cfg).with_structured_output(NoteDoc)`; map-reduce chunking sized to the model's context window; timestamps preserved.
 - **6.3 Summarize / restructure nodes** — re-runnable on existing notes without redoing structure.
-  - D: 3.1, 4.1 · DoD: a finished transcript yields a validated `NoteDoc`; summarize/restructure run independently and cheaply.
+  - D: 3.1, 4.1, 6.0 · DoD: a finished transcript yields a validated `NoteDoc`; summarize/restructure run independently and cheaply.
 
 ---
 
@@ -90,9 +92,9 @@ The hardest, most platform-specific piece — de-risk it early.
 
 ## Phase 9 · Settings & configuration UI
 
-- **9.1 Settings panel** — edit Ollama host/model, chunk size, theme; live validation against `/api/tags`.
-- **9.2 Empty/onboarding states** — first-run guidance (point at Ollama, pick a model, grant mac permission).
-  - D: 4.1, 5.1 · DoD: a new user can configure model + host and start their first session without touching files.
+- **9.1 Settings panel** — edit LLM provider, model, credentials, Ollama host, chunk size, theme; live validation (credential check for cloud providers, `/api/tags` for Ollama).
+- **9.2 Empty/onboarding states** — first-run guidance (pick a provider — Azure OpenAI default, or Anthropic / OpenAI / Gemini / Ollama — pick a model, grant mac permission).
+  - D: 4.1, 5.1 · DoD: a new user can configure provider + model and start their first session without touching files.
 
 ---
 
@@ -111,7 +113,7 @@ The hardest, most platform-specific piece — de-risk it early.
 - **11.2 Installers** — `pnpm tauri build` for macOS + Windows.
 - **11.3 Signing** — macOS notarization, Windows code signing.
 - **11.4 Auto-update** — Tauri updater channel.
-  - D: 5.1 + feature-complete app · DoD: a signed installer runs on a clean machine (with the user's own Ollama) end to end.
+  - D: 5.1 + feature-complete app · DoD: a signed installer runs on a clean machine (with the user's own provider key or local Ollama) end to end.
 
 ---
 
