@@ -48,7 +48,7 @@
 
   <!-- title -->
   <text x="40" y="50" font-size="27" font-weight="800" letter-spacing="-0.5"><tspan fill="url(#title)">Scribely</tspan><tspan class="m" font-size="18" font-weight="600" dx="10">· System Architecture</tspan></text>
-  <text x="41" y="74" class="mono m" font-size="11.5" letter-spacing="0.5">Local-first desktop app · macOS + Windows · Azure OpenAI default · Ollama / OpenAI / Gemini via config</text>
+  <text x="41" y="74" class="mono m" font-size="11.5" letter-spacing="0.5">Local-first desktop app · macOS + Windows · Azure OpenAI default · multi-provider via config</text>
 
   <!-- legend -->
   <line x1="836" y1="44" x2="868" y2="44" stroke="url(#spec)" stroke-width="2.5" marker-end="url(#aCyan)"/>
@@ -119,7 +119,7 @@
   <text x="644.5" y="349" class="t" font-size="13.5" font-weight="700">pipeline</text>
   <text x="644.5" y="370" class="mono m" font-size="9">LangGraph ·</text>
   <text x="644.5" y="384" class="mono m" font-size="9">llm_factory ·</text>
-  <text x="644.5" y="396" class="mono m" font-size="9">langchain-openai</text>
+  <text x="644.5" y="396" class="mono m" font-size="9">langchain-* providers</text>
   <!-- 05 -->
   <rect x="774" y="288" width="110" height="114" rx="12" fill="#161B27" stroke="#2A3242" filter="url(#soft)"/>
   <rect x="774" y="288" width="110" height="3" rx="1.5" fill="#FFC46B"/>
@@ -136,10 +136,11 @@
   <line x1="742.5" y1="345" x2="774" y2="345" stroke="url(#spec)" stroke-width="2.6" marker-end="url(#aAmber)"/>
 
   <!-- LLM Provider -->
-  <rect x="944" y="408" width="164" height="74" rx="13" fill="#141925" stroke="#67E8B0" stroke-dasharray="3 4" filter="url(#soft)"/>
+  <rect x="944" y="408" width="164" height="80" rx="13" fill="#141925" stroke="#67E8B0" stroke-dasharray="3 4" filter="url(#soft)"/>
   <text x="1026" y="430" text-anchor="middle" class="t" font-size="13" font-weight="700">LLM Provider</text>
   <text x="1026" y="448" text-anchor="middle" class="mono m" font-size="9">Azure OpenAI · gpt-4o (default)</text>
-  <text x="1026" y="462" text-anchor="middle" class="mono f" font-size="9">openai · gemini · ollama via config</text>
+  <text x="1026" y="462" text-anchor="middle" class="mono f" font-size="9">anthropic · openai</text>
+  <text x="1026" y="474" text-anchor="middle" class="mono f" font-size="9">gemini · ollama via config</text>
   <path d="M687.5,402 L687.5,445 L944,445" fill="none" stroke="#8693A8" stroke-width="1.7" stroke-dasharray="4 4" marker-start="url(#aGray)" marker-end="url(#aGray)"/>
   <text x="700" y="437" class="mono m" font-size="9.5">llm_factory · LangChain Chat* · structured output</text>
 
