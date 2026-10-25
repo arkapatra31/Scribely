@@ -6,3 +6,20 @@ export function formatClock(totalSeconds: number): string {
   const sec = String(s % 60).padStart(2, "0");
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
+
+const dateFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+export function formatDate(iso: string): string {
+  return dateFormat.format(new Date(iso));
+}
+
+/** A session's title, or a date-based name for untitled sessions. */
+export function sessionTitle(session: { title?: string | null; started_at: string }): string {
+  return session.title || `Session · ${formatDate(session.started_at)}`;
+}
