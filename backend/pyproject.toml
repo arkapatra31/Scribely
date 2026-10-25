@@ -17,11 +17,13 @@ dependencies = [
     "pyobjc-framework-coremedia>=12.2.2 ; sys_platform == 'darwin'",
     "pyobjc-framework-quartz>=12.2.2 ; sys_platform == 'darwin'",
     "pyobjc-framework-libdispatch>=12.2.2 ; sys_platform == 'darwin'",
+    "faster-whisper>=1.2.1",
 ]
 
 [project.scripts]
 scribely-backend = "scribely.__main__:main"
 scribely-capture-check = "scribely.capture.check:main"
+scribely-transcribe-check = "scribely.stt.check:main"
 
 [dependency-groups]
 dev = [
@@ -52,7 +54,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # Platform-only (PyAudioWPatch on Windows, PyObjC on macOS) or untyped packages.
-module = ["pyaudiowpatch", "objc", "Foundation", "CoreMedia", "Quartz", "ScreenCaptureKit", "dispatch", "soxr"]
+module = ["pyaudiowpatch", "objc", "Foundation", "CoreMedia", "Quartz", "ScreenCaptureKit", "dispatch", "soxr", "faster_whisper", "faster_whisper.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

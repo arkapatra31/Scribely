@@ -87,6 +87,7 @@ Scribely/                 # repo root
 uv sync                                   # create/update .venv from uv.lock
 uv run scribely-backend                   # start FastAPI sidecar (127.0.0.1:8765)
 uv run scribely-capture-check            # record 10 s of system audio to capture-check.wav
+uv run scribely-transcribe-check         # live-transcribe system audio in the terminal
 uv run pytest                             # tests
 uv run ruff check . && uv run ruff format --check . && uv run mypy .   # lint + format + types
 
