@@ -58,6 +58,7 @@ class SessionSummary(Schema):
     session: Session
     segment_count: int = Field(ge=0)
     duration: float = Field(ge=0, description="Seconds from session start to the last segment.")
+    has_notes: bool = False
 
 
 class NoteSection(Schema):
@@ -74,11 +75,21 @@ class NoteSection(Schema):
 
 
 class NoteDoc(Schema):
-    """Structured notes for one session; also the LLM's structured-output schema."""
+    """Structured notes for one session."""
 
     title: str = Field(description="Title describing the whole session.")
     summary: str = Field(description="A few sentences summarising the session.")
     sections: list[NoteSection] = Field(description="Note sections in chronological order.")
+
+
+class SessionNotes(Schema):
+    """Generated notes for a session, with what produced them."""
+
+    session_id: str
+    doc: NoteDoc
+    provider: str
+    model: str
+    created_at: datetime
 
 
 # --- WebSocket protocol (/ws) ------------------------------------------------------------
@@ -95,8 +106,10 @@ ErrorCode = Literal[
     "not_found",
     "session_busy",
     "storage_failed",
+    "llm_failed",
     "internal",
 ]
+NotesJobState = Literal["running", "done", "failed"]
 
 
 class StartCommand(Schema):
@@ -136,6 +149,13 @@ class DeleteSessionCommand(Schema):
     session_id: str
 
 
+class SummarizeCommand(Schema):
+    """Client -> server: generate (or regenerate) notes for a stopped session."""
+
+    type: Literal["summarize"]
+    session_id: str
+
+
 class StatusMessage(Schema):
     """Server -> client: backend state; sent on connect and on every change."""
 
@@ -143,6 +163,9 @@ class StatusMessage(Schema):
     state: BackendState
     session: Session | None = None
     model: str = Field(description="Configured speech model name.")
+    llm_issue: str | None = Field(
+        default=None, description="Why notes can't be generated right now, if known."
+    )
 
 
 class TranscriptSnapshot(Schema):
@@ -182,6 +205,23 @@ class SessionOpenedMessage(Schema):
     type: Literal["session_opened"]
     session: Session
     segments: list[TranscriptSegment]
+    notes: SessionNotes | None = None
+
+
+class NotesJobMessage(Schema):
+    """Server -> client: progress of a summarize request (broadcast)."""
+
+    type: Literal["notes_job"]
+    session_id: str
+    state: NotesJobState
+    message: str = Field(description="Plain-language progress or failure text.")
+
+
+class NotesMessage(Schema):
+    """Server -> client: finished notes for a session (broadcast)."""
+
+    type: Literal["notes"]
+    notes: SessionNotes
 
 
 class ErrorMessage(Schema):
@@ -198,7 +238,8 @@ ClientMessage = Annotated[
     | ListSessionsCommand
     | OpenSessionCommand
     | RenameSessionCommand
-    | DeleteSessionCommand,
+    | DeleteSessionCommand
+    | SummarizeCommand,
     Field(discriminator="type"),
 ]
 ServerMessage = Annotated[
@@ -208,6 +249,8 @@ ServerMessage = Annotated[
     | TranscriptFinalMessage
     | SessionsMessage
     | SessionOpenedMessage
+    | NotesJobMessage
+    | NotesMessage
     | ErrorMessage,
     Field(discriminator="type"),
 ]

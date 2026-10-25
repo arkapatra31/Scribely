@@ -139,3 +139,35 @@ def test_unwritable_location_is_actionable(tmp_path: Path) -> None:
     blocker.write_text("not a folder")
     with pytest.raises(StorageError, match="Couldn't create the Scribely data folder"):
         SessionStore.open(blocker / "scribely.db")
+
+
+def test_notes_roundtrip_has_notes_and_cascade(tmp_path: Path) -> None:
+    from scribely.models import NoteDoc, NoteSection, SessionNotes
+
+    store = SessionStore.open(tmp_path / "scribely.db")
+    notes = SessionNotes(
+        session_id="s1",
+        doc=NoteDoc(
+            title="T",
+            summary="S",
+            sections=[NoteSection(heading="H", points=["p"], start=0, end=1)],
+        ),
+        provider="azure_openai",
+        model="gpt-4o",
+        created_at=T0,
+    )
+
+    async def run() -> None:
+        await store.create_session(session(status="stopped"))
+        assert await store.get_notes("s1") is None
+        assert (await store.list_sessions())[0].has_notes is False
+        await store.save_notes(notes)
+        await store.save_notes(notes.model_copy(update={"model": "gpt-4.1"}))  # regenerate
+        saved = await store.get_notes("s1")
+        assert saved is not None and saved.doc == notes.doc and saved.model == "gpt-4.1"
+        assert (await store.list_sessions())[0].has_notes is True
+        await store.delete_session("s1")
+        assert await store.get_notes("s1") is None
+
+    asyncio.run(run())
+    store.close()

@@ -7,11 +7,12 @@ from typing import Any
 
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 from scribely.capture.base import AudioCapture, CaptureError, CapturePermissionError
 from scribely.capture.dsp import TARGET_SAMPLE_RATE as SR
 from scribely.capture.file import FileCapture
-from scribely.config import Settings, SttConfig
+from scribely.config import LLMConfig, Settings, SttConfig
 from scribely.models import (
     ErrorMessage,
     ServerMessage,
@@ -19,10 +20,12 @@ from scribely.models import (
     StatusMessage,
     TranscriptFinalMessage,
 )
+from scribely.pipeline.schemas import DraftNotes, DraftSection
 from scribely.session import LiveSessionManager, SessionError
 from scribely.session.store import SessionStore, StorageError
 from scribely.stt import STTError
 from tests.audio import write_wav
+from tests.fake_llm import FakeLLM
 from tests.stt_fakes import EnergyVAD, LoadableFakeTranscriber, quiet, tone
 
 LECTURE = np.concatenate([quiet(0.3), tone(1.0), quiet(1.0), tone(0.5), quiet(0.8)])
@@ -32,13 +35,27 @@ def make_manager(
     capture_factory: Callable[[], AudioCapture],
     transcriber: LoadableFakeTranscriber | None = None,
     store: SessionStore | None = None,
+    llm: FakeLLM | None = None,
 ) -> LiveSessionManager:
+    fake_llm = llm or FakeLLM(notes_handler)
     return LiveSessionManager(
-        Settings(stt=SttConfig(partial_interval_seconds=0)),
+        Settings(
+            stt=SttConfig(partial_interval_seconds=0),
+            llm=LLMConfig(azure_endpoint="https://example.openai.azure.com/"),
+        ),
         store=store or SessionStore.open(Path(tempfile.mkdtemp()) / "scribely.db"),
         transcriber=transcriber or LoadableFakeTranscriber(),
         capture_factory=capture_factory,
         vad_factory=EnergyVAD,
+        llm_factory=lambda cfg: fake_llm.as_chat_model(),
+    )
+
+
+def notes_handler(schema: type[BaseModel], prompt: str) -> BaseModel:
+    return DraftNotes(
+        title="Lecture notes",
+        summary="What was said.",
+        sections=[DraftSection(heading="Intro", points=["speech"], start_seconds=0, end_seconds=2)],
     )
 
 
@@ -251,3 +268,107 @@ def test_storage_failure_at_start_is_reported(tmp_path: Path) -> None:
         assert manager.state == "idle"
 
     asyncio.run(run())
+
+
+async def wait_notes(
+    queue: asyncio.Queue[ServerMessage], timeout: float = 5.0
+) -> list[ServerMessage]:
+    seen: list[ServerMessage] = []
+    async with asyncio.timeout(timeout):
+        while True:
+            message = await queue.get()
+            seen.append(message)
+            if message.type == "notes_job" and message.state in ("done", "failed"):
+                await asyncio.sleep(0.05)  # let the trailing notes/sessions broadcasts land
+                seen.extend(drain(queue))
+                return seen
+
+
+def test_summarize_on_demand_saves_and_broadcasts_notes(tmp_path: Path) -> None:
+    async def run() -> tuple[list[ServerMessage], Any]:
+        manager = make_manager(file_capture(tmp_path))
+        session = await manager.start()
+        await wait_idle(manager)
+        queue = manager.subscribe()
+        drain(queue)
+        await manager.summarize(session.id)
+        messages = await wait_notes(queue)
+        opened = await manager.open_session(session.id)
+        return messages, opened
+
+    messages, opened = asyncio.run(run())
+    jobs = [m for m in messages if m.type == "notes_job"]
+    assert jobs[0].state == "running" and "Azure OpenAI" in jobs[0].message
+    assert jobs[-1].state == "done"
+    notes = [m for m in messages if m.type == "notes"]
+    assert notes and notes[0].notes.doc.title == "Lecture notes"
+    listing = [m for m in messages if m.type == "sessions"][-1]
+    assert listing.sessions[0].has_notes is True
+    assert opened.notes is not None and opened.notes.model == "gpt-4o"
+
+
+def test_summarize_is_refused_while_recording_and_for_empty_sessions(tmp_path: Path) -> None:
+    async def run() -> None:
+        manager = make_manager(
+            file_capture(tmp_path, np.concatenate([tone(0.6), quiet(30)]), realtime=True)
+        )
+        session = await manager.start()
+        with pytest.raises(SessionError) as exc:
+            await manager.summarize(session.id)
+        assert exc.value.code == "session_busy"
+        await manager.stop()
+
+        silent = make_manager(file_capture(tmp_path, quiet(2)))
+        empty = await silent.start()
+        await wait_idle(silent)
+        with pytest.raises(SessionError) as exc:
+            await silent.summarize(empty.id)
+        assert exc.value.code == "llm_failed" and "Nothing was transcribed" in exc.value.message
+        with pytest.raises(SessionError) as exc:
+            await silent.summarize("missing")
+        assert exc.value.code == "not_found"
+
+    asyncio.run(run())
+
+
+def test_llm_failure_is_reported(tmp_path: Path) -> None:
+    class AuthenticationError(Exception):
+        status_code = 401
+
+    def boom(schema: type[BaseModel], prompt: str) -> BaseModel:
+        raise AuthenticationError("bad key")
+
+    async def run() -> list[ServerMessage]:
+        manager = make_manager(file_capture(tmp_path), llm=FakeLLM(boom))
+        session = await manager.start()
+        await wait_idle(manager)
+        queue = manager.subscribe()
+        drain(queue)
+        await manager.summarize(session.id)
+        return await wait_notes(queue)
+
+    messages = asyncio.run(run())
+    failed = [m for m in messages if m.type == "notes_job"][-1]
+    assert failed.state == "failed" and "rejected the API key" in failed.message
+    assert any(m.type == "error" and m.code == "llm_failed" for m in messages)
+
+
+def test_llm_setup_issue_is_reported_in_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+
+    async def run() -> tuple[str | None, list[ServerMessage]]:
+        manager = make_manager(file_capture(tmp_path))
+        session = await manager.start()
+        await wait_idle(manager)
+        queue = manager.subscribe()
+        drain(queue)
+        await manager.check_llm_setup()
+        status = manager._status().llm_issue
+        await manager.summarize(session.id)
+        return status, await wait_notes(queue)
+
+    issue, messages = asyncio.run(run())
+    assert issue is not None and "AZURE_OPENAI_API_KEY" in issue
+    assert [m for m in messages if m.type == "notes_job"][-1].state == "failed"

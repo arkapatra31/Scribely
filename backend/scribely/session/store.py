@@ -19,7 +19,14 @@ from typing import TypeVar
 
 import structlog
 
-from scribely.models import Session, SessionStatus, SessionSummary, TranscriptSegment
+from scribely.models import (
+    NoteDoc,
+    Session,
+    SessionNotes,
+    SessionStatus,
+    SessionSummary,
+    TranscriptSegment,
+)
 
 T = TypeVar("T")
 log = structlog.get_logger(__name__)
@@ -44,6 +51,15 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (session_id, idx)
     );
     CREATE INDEX sessions_started_at ON sessions(started_at DESC);
+    """,
+    """
+    CREATE TABLE notes (
+        session_id  TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+        doc         TEXT NOT NULL,
+        provider    TEXT NOT NULL,
+        model       TEXT NOT NULL,
+        created_at  TEXT NOT NULL
+    );
     """,
 ]
 
@@ -115,7 +131,13 @@ class SessionStore:
     async def delete_session(self, session_id: str) -> bool:
         return await self._run(self._delete_blocking, session_id)
 
+    async def save_notes(self, notes: SessionNotes) -> None:
+        await self._run(self._save_notes_blocking, notes)
+
     # --- reads ------------------------------------------------------------------------------
+
+    async def get_notes(self, session_id: str) -> SessionNotes | None:
+        return await self._run(self._get_notes_blocking, session_id)
 
     async def list_sessions(self) -> list[SessionSummary]:
         return await self._run(self._list_blocking)
@@ -209,16 +231,47 @@ class SessionStore:
 
     def _list_blocking(self) -> list[SessionSummary]:
         rows = self._db.execute(
-            "SELECT s.*, COUNT(g.idx) AS segment_count, COALESCE(MAX(g.end), 0) AS duration "
+            "SELECT s.*, COUNT(g.idx) AS segment_count, COALESCE(MAX(g.end), 0) AS duration, "
+            "EXISTS(SELECT 1 FROM notes n WHERE n.session_id = s.id) AS has_notes "
             "FROM sessions s LEFT JOIN segments g ON g.session_id = s.id "
             "GROUP BY s.id ORDER BY s.started_at DESC"
         ).fetchall()
         return [
             SessionSummary(
-                session=_row_to_session(r), segment_count=r["segment_count"], duration=r["duration"]
+                session=_row_to_session(r),
+                segment_count=r["segment_count"],
+                duration=r["duration"],
+                has_notes=bool(r["has_notes"]),
             )
             for r in rows
         ]
+
+    def _save_notes_blocking(self, notes: SessionNotes) -> None:
+        self._db.execute(
+            "INSERT INTO notes (session_id, doc, provider, model, created_at) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET doc = excluded.doc, "
+            "provider = excluded.provider, model = excluded.model, "
+            "created_at = excluded.created_at",
+            (
+                notes.session_id,
+                notes.doc.model_dump_json(),
+                notes.provider,
+                notes.model,
+                notes.created_at.isoformat(),
+            ),
+        )
+
+    def _get_notes_blocking(self, session_id: str) -> SessionNotes | None:
+        row = self._db.execute("SELECT * FROM notes WHERE session_id = ?", (session_id,)).fetchone()
+        if row is None:
+            return None
+        return SessionNotes(
+            session_id=session_id,
+            doc=NoteDoc.model_validate_json(row["doc"]),
+            provider=row["provider"],
+            model=row["model"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
 
     def _get_blocking(self, session_id: str) -> tuple[Session, list[TranscriptSegment]] | None:
         row = self._db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()

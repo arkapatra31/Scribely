@@ -18,6 +18,13 @@ dependencies = [
     "pyobjc-framework-quartz>=12.2.2 ; sys_platform == 'darwin'",
     "pyobjc-framework-libdispatch>=12.2.2 ; sys_platform == 'darwin'",
     "faster-whisper>=1.2.1",
+    "langgraph>=1.2.17",
+    "langchain-core>=1.7.0",
+    "langchain-openai>=1.7.2",
+    "langchain-anthropic>=1.7.6",
+    "langchain-google-genai>=4.4.2",
+    "langchain-ollama>=1.1.0",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]

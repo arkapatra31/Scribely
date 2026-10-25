@@ -48,10 +48,13 @@ temperature = 0.2
 # azure_deployment = "gpt-4o"
 azure_api_version = "2024-10-21"
 ollama_host = "http://localhost:11434"
+max_output_tokens = 4096
+request_timeout_seconds = 120.0
 
 [pipeline]
 chunk_size_tokens = 6000
 chunk_overlap_tokens = 200
+max_concurrency = 4         # transcript chunks summarized in parallel
 
 [paths]
 # data_dir = "~/Scribely"         # default: per-user data dir via platformdirs
