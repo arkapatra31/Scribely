@@ -7,7 +7,8 @@
 #      Windows: %LOCALAPPDATA%\Scribely\config.toml)
 # Any value can be overridden with an env var: SCRIBELY_<SECTION>__<KEY>, e.g. SCRIBELY_LLM__MODEL.
 #
-# API keys never go in this file. Set them as environment variables:
+# API keys are never stored anywhere. Enter yours in the app's Settings panel each time
+# Scribely starts (kept in memory only), or set them as environment variables:
 #   azure_openai: AZURE_OPENAI_API_KEY    anthropic: ANTHROPIC_API_KEY
 #   openai:       OPENAI_API_KEY          gemini:    GOOGLE_API_KEY
 #   ollama:       none (local)
@@ -41,6 +42,7 @@ partial_interval_seconds = 1.0   # live partial hypotheses while speaking; 0 dis
 
 [llm]
 # Used only when you press Summarize on a stopped session. Only the transcript text is sent.
+# Settings saved from the app's Settings panel override these values.
 provider = "azure_openai"   # azure_openai | anthropic | openai | gemini | ollama
 model = "gpt-4o"            # for azure_openai, the model behind your deployment
 temperature = 0.2

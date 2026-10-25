@@ -7,10 +7,12 @@ interface Props {
   tab: "notes" | "transcript";
   onTab: (tab: "notes" | "transcript") => void;
   onSummarize: () => void;
+  onOpenSettings: () => void;
 }
 
 /** Notes/Transcript tabs plus the on-demand Summarize action for a stopped session. */
-export function SummarizeBar({ hasNotes, job, llmIssue, tab, onTab, onSummarize }: Props) {
+export function SummarizeBar(props: Props) {
+  const { hasNotes, job, llmIssue, tab, onTab, onSummarize, onOpenSettings } = props;
   const running = job?.state === "running";
   return (
     <div className="border-b border-stone-200 px-6 py-2 dark:border-stone-800">
@@ -37,9 +39,14 @@ export function SummarizeBar({ hasNotes, job, llmIssue, tab, onTab, onSummarize 
           {running ? (
             <span className="animate-pulse">{job.message}</span>
           ) : llmIssue ? (
-            <span className="text-amber-700 dark:text-amber-400" title={llmIssue}>
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title={llmIssue}
+              className="max-w-full truncate text-amber-700 hover:underline dark:text-amber-400"
+            >
               Notes unavailable: {llmIssue}
-            </span>
+            </button>
           ) : null}
         </div>
         <button

@@ -24,6 +24,7 @@ interface Props {
   emptyMessage: string;
   onRename: (title: string) => void;
   onSummarize: () => void;
+  onOpenSettings: () => void;
   onBackToLive?: () => void;
 }
 
@@ -67,6 +68,7 @@ export function SessionPane(props: Props) {
             setTab(t);
           }}
           onSummarize={props.onSummarize}
+          onOpenSettings={props.onOpenSettings}
         />
       )}
       {showNotes ? (

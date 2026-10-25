@@ -1,5 +1,7 @@
 import type {
   ErrorMessage,
+  LlmSettingsMessage,
+  LlmTestMessage,
   NotesJobMessage,
   SessionNotes,
   Session,
@@ -27,6 +29,8 @@ export interface AppState {
   notes: Record<string, SessionNotes>;
   /** Latest summarize progress by session id. */
   jobs: Record<string, NotesJobMessage>;
+  llmSettings: LlmSettingsMessage | null;
+  llmTest: LlmTestMessage | "pending" | null;
   error: ErrorMessage | null;
 }
 
@@ -34,6 +38,8 @@ export type Action =
   | { kind: "connection"; value: ConnectionState }
   | { kind: "message"; message: ServerMessage }
   | { kind: "showLive" }
+  | { kind: "llmTestPending" }
+  | { kind: "llmTestReset" }
   | { kind: "dismissError" };
 
 export const initialState: AppState = {
@@ -45,6 +51,8 @@ export const initialState: AppState = {
   view: { kind: "live" },
   notes: {},
   jobs: {},
+  llmSettings: null,
+  llmTest: null,
   error: null,
 };
 
@@ -56,6 +64,10 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, error: null };
     case "showLive":
       return { ...state, view: { kind: "live" } };
+    case "llmTestPending":
+      return { ...state, llmTest: "pending" };
+    case "llmTestReset":
+      return { ...state, llmTest: null };
     case "message":
       return applyMessage(state, action.message);
   }
@@ -108,6 +120,10 @@ function applyMessage(state: AppState, message: ServerMessage): AppState {
       return { ...state, jobs: { ...state.jobs, [message.session_id]: message } };
     case "notes":
       return { ...state, notes: { ...state.notes, [message.notes.session_id]: message.notes } };
+    case "llm_settings":
+      return { ...state, llmSettings: message };
+    case "llm_test":
+      return { ...state, llmTest: message };
     case "error":
       return { ...state, error: message };
   }
