@@ -38,9 +38,10 @@ def test_unknown_origin_is_refused(client: TestClient) -> None:
 
 def test_record_session_over_websocket(client: TestClient) -> None:
     with client.websocket_connect("/ws", headers={"origin": "tauri://localhost"}) as ws:
-        first, second = json.loads(ws.receive_text()), json.loads(ws.receive_text())
+        first, second, third = (json.loads(ws.receive_text()) for _ in range(3))
         assert first["type"] == "status" and first["state"] == "idle"
         assert second == {"type": "transcript_snapshot", "segments": []}
+        assert third == {"type": "sessions", "sessions": []}
 
         ws.send_text(json.dumps({"type": "start", "title": "Bio 101"}))
         seen = receive_until(ws, lambda m: m["type"] == "status" and m["state"] == "idle")
@@ -52,9 +53,40 @@ def test_record_session_over_websocket(client: TestClient) -> None:
 
 def test_bad_and_invalid_commands_get_errors(client: TestClient) -> None:
     with client.websocket_connect("/ws") as ws:
-        ws.receive_text(), ws.receive_text()
+        for _ in range(3):
+            ws.receive_text()
         ws.send_text('{"type": "explode"}')
         assert json.loads(ws.receive_text())["code"] == "bad_message"
         ws.send_text('{"type": "stop"}')
         err = json.loads(ws.receive_text())
         assert err["type"] == "error" and err["code"] == "not_recording"
+
+
+def test_saved_sessions_over_websocket(client: TestClient) -> None:
+    with client.websocket_connect("/ws") as ws:
+        for _ in range(3):
+            ws.receive_text()
+        ws.send_text(json.dumps({"type": "start"}))
+        seen = receive_until(ws, lambda m: m["type"] == "status" and m["state"] == "idle")
+        session_id = seen[-1]["session"]["id"]
+        listing = receive_until(ws, lambda m: m["type"] == "sessions")[-1]
+        assert listing["sessions"][0]["session"]["id"] == session_id
+        assert listing["sessions"][0]["segment_count"] == 2
+
+        ws.send_text(
+            json.dumps({"type": "rename_session", "session_id": session_id, "title": " Bio "})
+        )
+        renamed = receive_until(ws, lambda m: m["type"] == "sessions")[-1]
+        assert renamed["sessions"][0]["session"]["title"] == "Bio"
+
+        ws.send_text(json.dumps({"type": "open_session", "session_id": session_id}))
+        opened = receive_until(ws, lambda m: m["type"] == "session_opened")[-1]
+        assert [s["text"] for s in opened["segments"]] == ["speech 1.0s", "speech 0.5s"]
+
+        ws.send_text(json.dumps({"type": "delete_session", "session_id": session_id}))
+        after = receive_until(ws, lambda m: m["type"] == "sessions")[-1]
+        assert after["sessions"] == []
+
+        ws.send_text(json.dumps({"type": "open_session", "session_id": session_id}))
+        err = receive_until(ws, lambda m: m["type"] == "error")[-1]
+        assert err["code"] == "not_found"

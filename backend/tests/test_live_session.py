@@ -1,4 +1,5 @@
 import asyncio
+import tempfile
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -14,10 +15,12 @@ from scribely.config import Settings, SttConfig
 from scribely.models import (
     ErrorMessage,
     ServerMessage,
+    Session,
     StatusMessage,
     TranscriptFinalMessage,
 )
 from scribely.session import LiveSessionManager, SessionError
+from scribely.session.store import SessionStore, StorageError
 from scribely.stt import STTError
 from tests.audio import write_wav
 from tests.stt_fakes import EnergyVAD, LoadableFakeTranscriber, quiet, tone
@@ -28,9 +31,11 @@ LECTURE = np.concatenate([quiet(0.3), tone(1.0), quiet(1.0), tone(0.5), quiet(0.
 def make_manager(
     capture_factory: Callable[[], AudioCapture],
     transcriber: LoadableFakeTranscriber | None = None,
+    store: SessionStore | None = None,
 ) -> LiveSessionManager:
     return LiveSessionManager(
         Settings(stt=SttConfig(partial_interval_seconds=0)),
+        store=store or SessionStore.open(Path(tempfile.mkdtemp()) / "scribely.db"),
         transcriber=transcriber or LoadableFakeTranscriber(),
         capture_factory=capture_factory,
         vad_factory=EnergyVAD,
@@ -190,3 +195,59 @@ def test_new_subscriber_gets_last_session_snapshot(tmp_path: Path) -> None:
     assert isinstance(status, StatusMessage) and status.session is not None
     assert snapshot.type == "transcript_snapshot"
     assert [s.text for s in snapshot.segments] == ["speech 1.0s", "speech 0.5s"]
+
+
+def test_segments_are_persisted_and_survive_restart(tmp_path: Path) -> None:
+    db = tmp_path / "scribely.db"
+
+    async def run() -> str:
+        manager = make_manager(file_capture(tmp_path), store=SessionStore.open(db))
+        session = await manager.start("Persisted")
+        await wait_idle(manager)
+        return session.id
+
+    session_id = asyncio.run(run())
+    reopened = SessionStore.open(db)
+    found = asyncio.run(reopened.get_session(session_id))
+    assert found is not None
+    session, segments = found
+    assert session.status == "stopped" and session.title == "Persisted"
+    assert [s.text for s in segments] == ["speech 1.0s", "speech 0.5s"]
+
+
+def test_live_session_can_be_opened_and_not_deleted_while_recording(tmp_path: Path) -> None:
+    async def run() -> None:
+        manager = make_manager(
+            file_capture(tmp_path, np.concatenate([tone(0.6), quiet(30)]), realtime=True)
+        )
+        session = await manager.start()
+        await asyncio.sleep(1.5)
+        opened = await manager.open_session(session.id)
+        assert opened.session.status == "recording"
+        assert len(opened.segments) == 1
+        with pytest.raises(SessionError) as exc:
+            await manager.delete_session(session.id)
+        assert exc.value.code == "session_busy"
+        await manager.stop()
+        await manager.delete_session(session.id)
+        assert (await manager.sessions_message()).sessions == []
+
+    asyncio.run(run())
+
+
+def test_storage_failure_at_start_is_reported(tmp_path: Path) -> None:
+    class FullDiskStore(SessionStore):
+        async def create_session(self, session: Session) -> None:
+            raise StorageError("Couldn't save or load sessions: database or disk is full.")
+
+    store = FullDiskStore.open(tmp_path / "scribely.db")
+
+    async def run() -> None:
+        manager = make_manager(file_capture(tmp_path), store=store)
+        with pytest.raises(SessionError) as exc:
+            await manager.start()
+        assert exc.value.code == "storage_failed"
+        assert "disk is full" in exc.value.message
+        assert manager.state == "idle"
+
+    asyncio.run(run())

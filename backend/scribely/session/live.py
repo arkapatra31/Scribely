@@ -1,7 +1,8 @@
 """Live recording sessions: capture -> streaming STT -> broadcast to WebSocket clients.
 
 One session records at a time. Final segments of the current/last session are kept in
-memory (the rolling window the live UI is fed from); persistence comes in Phase 3.
+memory (the rolling window the live UI is fed from); SQLite is the durable copy, flushed
+about once a second while recording.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ from scribely.models import (
     ErrorMessage,
     ServerMessage,
     Session,
+    SessionOpenedMessage,
+    SessionsMessage,
     SessionStatus,
     StatusMessage,
     TranscriptFinalMessage,
@@ -29,10 +32,12 @@ from scribely.models import (
     TranscriptSegment,
     TranscriptSnapshot,
 )
+from scribely.session.store import SessionStore, StorageError
 from scribely.stt import SileroVAD, SpeechDetector, StreamingTranscriber, STTError
 from scribely.stt.transcriber import Transcriber, WhisperTranscriber
 
 SUBSCRIBER_QUEUE_SIZE = 1000
+FLUSH_INTERVAL_SECONDS = 1.0
 
 log = structlog.get_logger(__name__)
 
@@ -55,11 +60,13 @@ class LiveSessionManager:
         self,
         settings: Settings,
         *,
+        store: SessionStore,
         transcriber: LoadableTranscriber | None = None,
         capture_factory: Callable[[], AudioCapture] | None = None,
         vad_factory: Callable[[], SpeechDetector] | None = None,
     ) -> None:
         self._settings = settings
+        self._store = store
         self._transcriber: LoadableTranscriber = transcriber or WhisperTranscriber(
             settings.stt, settings.paths.resolved_models_dir()
         )
@@ -74,6 +81,8 @@ class LiveSessionManager:
         self._capture: AudioCapture | None = None
         self._run_task: asyncio.Task[None] | None = None
         self._run_failed = False
+        self._flush_task: asyncio.Task[None] | None = None
+        self._storage_warned = False
 
     @property
     def state(self) -> BackendState:
@@ -164,11 +173,20 @@ class LiveSessionManager:
                 status="recording",
                 started_at=datetime.now(UTC),
             )
+            try:
+                await self._store.create_session(session)
+            except StorageError as err:
+                await capture.stop()
+                self._set_state("idle")
+                raise SessionError("storage_failed", str(err)) from None
+
             self._session, self._segments, self._capture = session, [], capture
-            self._run_failed = False
+            self._run_failed = self._storage_warned = False
             self._run_task = asyncio.create_task(self._run(capture, session))
+            self._flush_task = asyncio.create_task(self._flush_loop())
             self._set_state("recording")
             self._broadcast(TranscriptSnapshot(type="transcript_snapshot", segments=[]))
+            await self._broadcast_sessions()
             log.info("session.started", session_id=session.id)
             return session
 
@@ -179,11 +197,13 @@ class LiveSessionManager:
             self._set_state("stopping")
             await self._capture.stop()
             await self._run_task  # drains the last segment; handles its own errors
-            return self._end_session("failed" if self._run_failed else "stopped")
+            return await self._end_session("failed" if self._run_failed else "stopped")
 
     async def shutdown(self) -> None:
         if self._state == "recording":
             await self.stop()
+        elif self._run_task is not None:  # a session is finishing on its own
+            await self._run_task
 
     async def _run(self, capture: AudioCapture, session: Session) -> None:
         stream = StreamingTranscriber(self._transcriber, self._vad_factory(), self._settings.stt)
@@ -198,6 +218,7 @@ class LiveSessionManager:
                         text=u.text,
                     )
                     self._segments.append(segment)
+                    self._store.queue_segment(segment)
                     self._broadcast(
                         TranscriptFinalMessage(type="transcript_final", segment=segment)
                     )
@@ -212,8 +233,9 @@ class LiveSessionManager:
                         )
                     )
             if self._state == "recording":  # the source ended by itself (e.g. end of file)
+                self._set_state("stopping")  # stop() now refuses; we finish the session here
                 await capture.stop()
-                self._end_session("stopped")
+                await self._end_session("stopped")
         except Exception as err:
             self._run_failed = True
             code: ErrorCode
@@ -230,16 +252,101 @@ class LiveSessionManager:
                     f"Recording stopped because of an unexpected error: {err}",
                 )
             self._broadcast(ErrorMessage(type="error", code=code, message=message))
-            await capture.stop()
             if self._state == "recording":  # not already being stopped by stop()
-                self._end_session("failed")
+                self._set_state("stopping")
+                await capture.stop()
+                await self._end_session("failed")
+            else:
+                await capture.stop()
 
-    def _end_session(self, status: SessionStatus) -> Session:
+    async def _end_session(self, status: SessionStatus) -> Session:
         assert self._session is not None
+        if self._flush_task is not None:
+            self._flush_task.cancel()
+            self._flush_task = None
         session = self._session.model_copy(update={"status": status, "ended_at": datetime.now(UTC)})
         self._session, self._capture, self._run_task = session, None, None
+        try:
+            await self._store.flush()
+            await self._store.update_session(session)
+        except StorageError as err:
+            self._storage_error(err)
         self._set_state("idle")
+        await self._broadcast_sessions()
         log.info(
             "session.ended", session_id=session.id, status=status, segments=len(self._segments)
         )
         return session
+
+    async def _flush_loop(self) -> None:
+        while True:
+            await asyncio.sleep(FLUSH_INTERVAL_SECONDS)
+            try:
+                await self._store.flush()
+            except StorageError as err:
+                self._storage_error(err)  # segments stay queued; retried next tick
+
+    def _storage_error(self, err: StorageError) -> None:
+        if not self._storage_warned:  # one banner per session, not one per second
+            self._storage_warned = True
+            self._broadcast(ErrorMessage(type="error", code="storage_failed", message=str(err)))
+
+    # --- saved sessions ---------------------------------------------------------------------
+
+    async def sessions_message(self) -> SessionsMessage:
+        try:
+            sessions = await self._store.list_sessions()
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        return SessionsMessage(type="sessions", sessions=sessions)
+
+    async def _broadcast_sessions(self) -> None:
+        try:
+            self._broadcast(await self.sessions_message())
+        except SessionError as err:
+            log.warning("storage.list_failed", error=err.message)
+
+    async def open_session(self, session_id: str) -> SessionOpenedMessage:
+        if self._session is not None and self._session.id == session_id:
+            # The live session: memory is ahead of the last flush.
+            return SessionOpenedMessage(
+                type="session_opened", session=self._session, segments=self._segments
+            )
+        try:
+            found = await self._store.get_session(session_id)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        if found is None:
+            raise SessionError("not_found", "That session no longer exists.")
+        session, segments = found
+        return SessionOpenedMessage(type="session_opened", session=session, segments=segments)
+
+    async def rename_session(self, session_id: str, title: str) -> Session:
+        clean = title.strip() or None
+        try:
+            renamed = await self._store.rename_session(session_id, clean)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        if renamed is None:
+            raise SessionError("not_found", "That session no longer exists.")
+        if self._session is not None and self._session.id == session_id:
+            self._session = self._session.model_copy(update={"title": clean})
+            self._broadcast(self._status())
+        await self._broadcast_sessions()
+        return renamed
+
+    async def delete_session(self, session_id: str) -> None:
+        is_current = self._session is not None and self._session.id == session_id
+        if is_current and self._state != "idle":
+            raise SessionError("session_busy", "Stop the recording before deleting it.")
+        try:
+            deleted = await self._store.delete_session(session_id)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        if not deleted:
+            raise SessionError("not_found", "That session no longer exists.")
+        if is_current:
+            self._session, self._segments = None, []
+            self._broadcast(self._status())
+            self._broadcast(TranscriptSnapshot(type="transcript_snapshot", segments=[]))
+        await self._broadcast_sessions()

@@ -11,7 +11,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-SessionStatus = Literal["recording", "stopped", "generating", "ready", "failed"]
+# interrupted: the app quit or crashed mid-recording; saved segments were recovered.
+SessionStatus = Literal["recording", "stopped", "interrupted", "failed"]
 
 
 class Schema(BaseModel):
@@ -51,6 +52,14 @@ class Session(Schema):
         return self
 
 
+class SessionSummary(Schema):
+    """A session as shown in the session list."""
+
+    session: Session
+    segment_count: int = Field(ge=0)
+    duration: float = Field(ge=0, description="Seconds from session start to the last segment.")
+
+
 class NoteSection(Schema):
     heading: str = Field(description="Short title for this part of the lecture.")
     points: list[str] = Field(description="Concise note points, in lecture order.")
@@ -83,6 +92,9 @@ ErrorCode = Literal[
     "already_recording",
     "not_recording",
     "bad_message",
+    "not_found",
+    "session_busy",
+    "storage_failed",
     "internal",
 ]
 
@@ -98,6 +110,30 @@ class StopCommand(Schema):
     """Client -> server: stop the current session."""
 
     type: Literal["stop"]
+
+
+class ListSessionsCommand(Schema):
+    """Client -> server: ask for the session list (also sent automatically on connect)."""
+
+    type: Literal["list_sessions"]
+
+
+class OpenSessionCommand(Schema):
+    """Client -> server: load a saved session's transcript."""
+
+    type: Literal["open_session"]
+    session_id: str
+
+
+class RenameSessionCommand(Schema):
+    type: Literal["rename_session"]
+    session_id: str
+    title: str = Field(max_length=200)
+
+
+class DeleteSessionCommand(Schema):
+    type: Literal["delete_session"]
+    session_id: str
 
 
 class StatusMessage(Schema):
@@ -133,6 +169,21 @@ class TranscriptFinalMessage(Schema):
     segment: TranscriptSegment
 
 
+class SessionsMessage(Schema):
+    """Server -> client: all saved sessions, newest first; sent on connect and on changes."""
+
+    type: Literal["sessions"]
+    sessions: list[SessionSummary]
+
+
+class SessionOpenedMessage(Schema):
+    """Server -> client: reply to open_session."""
+
+    type: Literal["session_opened"]
+    session: Session
+    segments: list[TranscriptSegment]
+
+
 class ErrorMessage(Schema):
     """Server -> client: a plain-language problem to show the user."""
 
@@ -141,12 +192,22 @@ class ErrorMessage(Schema):
     message: str
 
 
-ClientMessage = Annotated[StartCommand | StopCommand, Field(discriminator="type")]
+ClientMessage = Annotated[
+    StartCommand
+    | StopCommand
+    | ListSessionsCommand
+    | OpenSessionCommand
+    | RenameSessionCommand
+    | DeleteSessionCommand,
+    Field(discriminator="type"),
+]
 ServerMessage = Annotated[
     StatusMessage
     | TranscriptSnapshot
     | TranscriptPartialMessage
     | TranscriptFinalMessage
+    | SessionsMessage
+    | SessionOpenedMessage
     | ErrorMessage,
     Field(discriminator="type"),
 ]

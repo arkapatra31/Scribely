@@ -14,8 +14,7 @@ from scribely.models import HealthResponse
 from scribely.session import LiveSessionManager
 
 
-def create_app(settings: Settings, manager: LiveSessionManager | None = None) -> FastAPI:
-    live = manager or LiveSessionManager(settings)
+def create_app(settings: Settings, live: LiveSessionManager) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
