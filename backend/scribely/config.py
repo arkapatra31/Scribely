@@ -102,11 +102,15 @@ class LLMConfig(_Section):
     azure_deployment: str | None = None
     azure_api_version: str = "2024-10-21"
     ollama_host: str = "http://localhost:11434"
+    max_output_tokens: int = Field(default=4096, gt=0)
+    request_timeout_seconds: float = Field(default=120.0, gt=0)
 
 
 class PipelineConfig(_Section):
     chunk_size_tokens: int = Field(default=6000, gt=0)
     chunk_overlap_tokens: int = Field(default=200, ge=0)
+    # Transcript chunks summarized in parallel during the map step.
+    max_concurrency: int = Field(default=4, ge=1)
 
     @model_validator(mode="after")
     def _overlap_smaller_than_chunk(self) -> Self:

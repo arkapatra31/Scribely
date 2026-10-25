@@ -19,4 +19,6 @@ pnpm dev                         # opens the Tauri window
 
 Run the backend and `pnpm dev` side by side: the window connects to `ws://127.0.0.1:8765/ws` (override with `VITE_SCRIBELY_WS_URL`). Press **Record**, play a lecture, and the transcript streams in. The app doesn't launch the backend itself yet (Phase 5.1).
 
+**Notes (Summarize):** open a stopped session and press **✦ Summarize**. The transcript is sent to the LLM configured under `[llm]` (Azure OpenAI `gpt-4o` by default). For Azure, set `azure_endpoint` and `azure_deployment` in `config.toml` and export `AZURE_OPENAI_API_KEY` before starting the backend. Anthropic, OpenAI, Gemini and Ollama work the same way; see `config.toml.example`.
+
 Configuration: copy `config.toml.example` to `config.toml` and edit. API keys go in environment variables (see the example file). See `CLAUDE.md` for project rules and `PLAN.md` for the build plan.

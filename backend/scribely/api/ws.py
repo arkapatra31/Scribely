@@ -18,6 +18,7 @@ from scribely.models import (
     ServerMessage,
     StartCommand,
     StopCommand,
+    SummarizeCommand,
 )
 from scribely.session import LiveSessionManager, SessionError
 
@@ -80,6 +81,8 @@ async def _handle(
                 await manager.rename_session(command.session_id, command.title)
             case DeleteSessionCommand():
                 await manager.delete_session(command.session_id)
+            case SummarizeCommand():
+                await manager.summarize(command.session_id)
     except SessionError as err:
         queue.put_nowait(ErrorMessage(type="error", code=err.code, message=err.message))
 

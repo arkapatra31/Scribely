@@ -40,6 +40,7 @@ max_segment_seconds = 15.0  # continuous speech is cut at the longest pause afte
 partial_interval_seconds = 1.0   # live partial hypotheses while speaking; 0 disables
 
 [llm]
+# Used only when you press Summarize on a stopped session. Only the transcript text is sent.
 provider = "azure_openai"   # azure_openai | anthropic | openai | gemini | ollama
 model = "gpt-4o"            # for azure_openai, the model behind your deployment
 temperature = 0.2
@@ -48,10 +49,13 @@ temperature = 0.2
 # azure_deployment = "gpt-4o"
 azure_api_version = "2024-10-21"
 ollama_host = "http://localhost:11434"
+max_output_tokens = 4096
+request_timeout_seconds = 120.0
 
 [pipeline]
 chunk_size_tokens = 6000
 chunk_overlap_tokens = 200
+max_concurrency = 4         # transcript chunks summarized in parallel
 
 [paths]
 # data_dir = "~/Scribely"         # default: per-user data dir via platformdirs

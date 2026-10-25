@@ -1,17 +1,25 @@
 import { ErrorBanner } from "./components/ErrorBanner";
 import { RecordControls } from "./components/RecordControls";
-import { SessionHeader } from "./components/SessionHeader";
+import { SessionPane } from "./components/SessionPane";
 import { Sidebar } from "./components/Sidebar";
 import { StatusPill } from "./components/StatusPill";
-import { Transcript } from "./components/Transcript";
 import { useScribely } from "./useScribely";
 
 const OFFLINE_MESSAGE =
   "Can't reach the Scribely backend. Start it by running “uv run scribely-backend” in the backend folder.";
 
 export default function App() {
-  const { state, start, stop, openSession, renameSession, deleteSession, showLive, dismissError } =
-    useScribely();
+  const {
+    state,
+    start,
+    stop,
+    openSession,
+    renameSession,
+    deleteSession,
+    summarize,
+    showLive,
+    dismissError,
+  } = useScribely();
   const backendState = state.status?.state;
   const connected = state.connection === "open" && state.status !== null;
   const recording = backendState === "recording" || backendState === "stopping";
@@ -21,7 +29,6 @@ export default function App() {
   const shown = state.view.kind === "saved" ? state.view.session : liveSession;
   const segments = state.view.kind === "saved" ? state.view.segments : state.segments;
   const partial = viewingSaved ? null : state.partial;
-  const duration = segments.length ? segments[segments.length - 1].end : 0;
 
   const emptyMessage = viewingSaved
     ? "Nothing was transcribed in this session."
@@ -29,7 +36,10 @@ export default function App() {
       ? "Listening… the transcript appears here as people speak."
       : "Press Record, then play your lecture.";
 
-  const openFromList = (id: string) => (id === liveSession?.id ? showLive() : openSession(id));
+  // The recording session is shown live; anything else (including the just-stopped one)
+  // is opened from storage so its saved notes come along.
+  const openFromList = (id: string) =>
+    id === liveSession?.id && recording ? showLive() : openSession(id);
 
   return (
     <div className="flex h-screen flex-col bg-stone-50 text-stone-800 dark:bg-stone-950 dark:text-stone-100">
@@ -51,21 +61,20 @@ export default function App() {
         />
 
         <main className="flex min-w-0 flex-1 flex-col">
-          {shown && (
-            <SessionHeader
-              key={`header-${shown.id}`}
-              session={shown}
-              duration={duration}
-              live={!viewingSaved}
-              onRename={(title) => renameSession(shown.id, title)}
-              onBackToLive={viewingSaved && recording ? showLive : undefined}
-            />
-          )}
-          <Transcript
-            key={`transcript-${shown?.id ?? "none"}`}
+          <SessionPane
+            key={shown?.id ?? "none"}
+            session={shown}
             segments={segments}
             partial={partial}
+            live={!viewingSaved}
+            recording={recording}
+            notes={shown ? state.notes[shown.id] : undefined}
+            job={shown ? state.jobs[shown.id] : undefined}
+            llmIssue={state.status?.llm_issue ?? null}
             emptyMessage={emptyMessage}
+            onRename={(title) => shown && renameSession(shown.id, title)}
+            onSummarize={() => shown && summarize(shown.id)}
+            onBackToLive={viewingSaved && recording ? showLive : undefined}
           />
           <footer className="border-t border-stone-200 px-6 py-4 dark:border-stone-800">
             <RecordControls

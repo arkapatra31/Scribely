@@ -14,15 +14,19 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 import structlog
+from langchain_core.language_models import BaseChatModel
 
 from scribely.capture import AudioCapture, CaptureError, CapturePermissionError, create_capture
-from scribely.config import Settings
+from scribely.config import LLMConfig, Settings
 from scribely.models import (
     BackendState,
     ErrorCode,
     ErrorMessage,
+    NotesJobMessage,
+    NotesMessage,
     ServerMessage,
     Session,
+    SessionNotes,
     SessionOpenedMessage,
     SessionsMessage,
     SessionStatus,
@@ -32,6 +36,8 @@ from scribely.models import (
     TranscriptSegment,
     TranscriptSnapshot,
 )
+from scribely.pipeline import LLMError, check_llm, generate_notes, get_llm
+from scribely.pipeline.llm_factory import provider_name
 from scribely.session.store import SessionStore, StorageError
 from scribely.stt import SileroVAD, SpeechDetector, StreamingTranscriber, STTError
 from scribely.stt.transcriber import Transcriber, WhisperTranscriber
@@ -64,6 +70,7 @@ class LiveSessionManager:
         transcriber: LoadableTranscriber | None = None,
         capture_factory: Callable[[], AudioCapture] | None = None,
         vad_factory: Callable[[], SpeechDetector] | None = None,
+        llm_factory: Callable[[LLMConfig], BaseChatModel] = get_llm,
     ) -> None:
         self._settings = settings
         self._store = store
@@ -83,6 +90,9 @@ class LiveSessionManager:
         self._run_failed = False
         self._flush_task: asyncio.Task[None] | None = None
         self._storage_warned = False
+        self._notes_jobs: dict[str, asyncio.Task[None]] = {}
+        self._llm_factory = llm_factory
+        self._llm_issue: str | None = None
 
     @property
     def state(self) -> BackendState:
@@ -110,7 +120,11 @@ class LiveSessionManager:
 
     def _status(self) -> StatusMessage:
         return StatusMessage(
-            type="status", state=self._state, session=self._session, model=self._settings.stt.model
+            type="status",
+            state=self._state,
+            session=self._session,
+            model=self._settings.stt.model,
+            llm_issue=self._llm_issue,
         )
 
     def _set_state(self, state: BackendState) -> None:
@@ -200,6 +214,8 @@ class LiveSessionManager:
             return await self._end_session("failed" if self._run_failed else "stopped")
 
     async def shutdown(self) -> None:
+        for job in list(self._notes_jobs.values()):
+            job.cancel()
         if self._state == "recording":
             await self.stop()
         elif self._run_task is not None:  # a session is finishing on its own
@@ -307,8 +323,8 @@ class LiveSessionManager:
             log.warning("storage.list_failed", error=err.message)
 
     async def open_session(self, session_id: str) -> SessionOpenedMessage:
-        if self._session is not None and self._session.id == session_id:
-            # The live session: memory is ahead of the last flush.
+        if self._session is not None and self._session.id == session_id and self._state != "idle":
+            # Still recording: memory is ahead of the last flush (and there are no notes yet).
             return SessionOpenedMessage(
                 type="session_opened", session=self._session, segments=self._segments
             )
@@ -319,7 +335,13 @@ class LiveSessionManager:
         if found is None:
             raise SessionError("not_found", "That session no longer exists.")
         session, segments = found
-        return SessionOpenedMessage(type="session_opened", session=session, segments=segments)
+        try:
+            notes = await self._store.get_notes(session_id)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        return SessionOpenedMessage(
+            type="session_opened", session=session, segments=segments, notes=notes
+        )
 
     async def rename_session(self, session_id: str, title: str) -> Session:
         clean = title.strip() or None
@@ -350,3 +372,97 @@ class LiveSessionManager:
             self._broadcast(self._status())
             self._broadcast(TranscriptSnapshot(type="transcript_snapshot", segments=[]))
         await self._broadcast_sessions()
+
+    # --- notes ------------------------------------------------------------------------------
+
+    async def check_llm_setup(self) -> None:
+        """Validate the notes LLM settings (startup and before each summarize)."""
+        try:
+            await check_llm(self._settings.llm)
+        except LLMError as err:
+            issue: str | None = str(err)
+            log.warning("llm.not_ready", issue=issue)
+        else:
+            issue = None
+        if issue != self._llm_issue:
+            self._llm_issue = issue
+            self._broadcast(self._status())
+
+    async def summarize(self, session_id: str) -> None:
+        """Start generating notes for a stopped session; progress and results are broadcast.
+
+        Runs only on the user's request and never while that session is recording
+        (CLAUDE.md rule 1).
+        """
+        if self._session is not None and self._session.id == session_id and self._state != "idle":
+            raise SessionError(
+                "session_busy",
+                "Stop the recording first; notes are made from the finished transcript.",
+            )
+        if session_id in self._notes_jobs:
+            raise SessionError("session_busy", "Notes for this session are already being written.")
+        try:
+            found = await self._store.get_session(session_id)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        if found is None:
+            raise SessionError("not_found", "That session no longer exists.")
+        _, segments = found
+        if not segments:
+            raise SessionError(
+                "llm_failed",
+                "Nothing was transcribed in this session, so there's nothing to summarize.",
+            )
+        self._notes_jobs[session_id] = asyncio.create_task(self._summarize(session_id, segments))
+
+    async def _summarize(self, session_id: str, segments: list[TranscriptSegment]) -> None:
+        cfg = self._settings.llm
+
+        async def progress(message: str) -> None:
+            self._broadcast(
+                NotesJobMessage(
+                    type="notes_job", session_id=session_id, state="running", message=message
+                )
+            )
+
+        try:
+            await self.check_llm_setup()
+            if self._llm_issue is not None:
+                raise LLMError(self._llm_issue)
+            await progress(f"Sending the transcript to {provider_name(cfg)} ({cfg.model})…")
+            doc = await generate_notes(segments, self._llm_factory(cfg), self._settings, progress)
+            notes = SessionNotes(
+                session_id=session_id,
+                doc=doc,
+                provider=cfg.provider,
+                model=cfg.model,
+                created_at=datetime.now(UTC),
+            )
+            await self._store.save_notes(notes)
+        except (LLMError, StorageError) as err:
+            self._notes_failed(session_id, str(err))
+        except Exception as err:
+            log.exception("notes.failed", session_id=session_id)
+            self._notes_failed(
+                session_id, f"Couldn't write notes because of an unexpected error: {err}"
+            )
+        else:
+            log.info("notes.done", session_id=session_id, sections=len(doc.sections))
+            self._broadcast(
+                NotesJobMessage(
+                    type="notes_job", session_id=session_id, state="done", message="Notes ready."
+                )
+            )
+            self._broadcast(NotesMessage(type="notes", notes=notes))
+            await self._broadcast_sessions()
+        finally:
+            self._notes_jobs.pop(session_id, None)
+
+    def _notes_failed(self, session_id: str, message: str) -> None:
+        log.warning("notes.failed", session_id=session_id, error=message)
+        self._broadcast(
+            NotesJobMessage(
+                type="notes_job", session_id=session_id, state="failed", message=message
+            )
+        )
+        self._broadcast(ErrorMessage(type="error", code="llm_failed", message=message))
