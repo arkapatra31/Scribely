@@ -21,6 +21,12 @@ class FakeLLM:
     def with_structured_output(self, schema: type[BaseModel], **_: Any) -> "_Bound":
         return _Bound(self, schema)
 
+    async def ainvoke(self, prompt: Any) -> str:
+        """Plain (unstructured) call, used by the Settings 'Test connection' check."""
+        self.calls.append(("text", str(prompt)))
+        result = self.handler(BaseModel, str(prompt))
+        return str(result)
+
     def as_chat_model(self) -> BaseChatModel:
         return cast(BaseChatModel, self)
 

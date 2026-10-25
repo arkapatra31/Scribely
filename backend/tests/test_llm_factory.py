@@ -23,13 +23,12 @@ def _no_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_azure_needs_endpoint_then_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(LLMError, match="azure_endpoint"):
-        get_llm(LLMConfig())
+    with pytest.raises(LLMError, match="endpoint and deployment in Settings"):
+        get_llm(LLMConfig(), "key")
     cfg = LLMConfig(azure_endpoint="https://x.openai.azure.com/", azure_deployment="notes")
-    with pytest.raises(LLMError, match="AZURE_OPENAI_API_KEY"):
+    with pytest.raises(LLMError, match=r"add it in Settings \(or set AZURE_OPENAI_API_KEY\)"):
         get_llm(cfg)
-    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test")
-    llm = get_llm(cfg)
+    llm = get_llm(cfg, "test")
     assert type(llm).__name__ == "AzureChatOpenAI"
     assert llm.deployment_name == "notes"  # type: ignore[attr-defined]
 
@@ -48,8 +47,7 @@ def test_cloud_providers_resolve_from_config(
     cfg = LLMConfig(provider=provider, model="some-model")
     with pytest.raises(LLMError, match=env):
         get_llm(cfg)
-    monkeypatch.setenv(env, "test")
-    assert type(get_llm(cfg)).__name__ == cls
+    assert type(get_llm(cfg, "test")).__name__ == cls
 
 
 def test_ollama_needs_no_key() -> None:

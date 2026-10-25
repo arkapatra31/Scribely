@@ -9,13 +9,7 @@ import httpx
 from langchain_core.language_models import BaseChatModel
 
 from scribely.config import LLMConfig
-
-_KEY_ENV = {
-    "azure_openai": "AZURE_OPENAI_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "gemini": "GOOGLE_API_KEY",
-}
+from scribely.credentials import KEY_ENV
 
 _PROVIDER_NAMES = {
     "azure_openai": "Azure OpenAI",
@@ -65,10 +59,21 @@ def _azure_endpoint(cfg: LLMConfig) -> str | None:
     return cfg.azure_endpoint or os.environ.get("AZURE_OPENAI_ENDPOINT")
 
 
-def get_llm(cfg: LLMConfig) -> BaseChatModel:
+SUGGESTED_MODELS: dict[str, list[str]] = {
+    "azure_openai": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"],
+    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"],
+    "anthropic": ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
+    "gemini": ["gemini-2.5-flash", "gemini-2.5-pro"],
+    "ollama": [],
+}
+
+
+def get_llm(cfg: LLMConfig, api_key: str | None = None) -> BaseChatModel:
     """Build the chat model for ``cfg``; raises LLMError if required settings are missing."""
-    _check_settings(cfg)
+    _check_settings(cfg, api_key)
     common: dict[str, Any] = {"temperature": cfg.temperature, "max_retries": 2}
+    if cfg.provider != "ollama":
+        common["api_key"] = api_key
     match cfg.provider:
         case "azure_openai":
             from langchain_openai import AzureChatOpenAI
@@ -121,37 +126,37 @@ def get_llm(cfg: LLMConfig) -> BaseChatModel:
             )
 
 
-def _check_settings(cfg: LLMConfig) -> None:
+def _check_settings(cfg: LLMConfig, api_key: str | None) -> None:
     name = provider_name(cfg)
     if cfg.provider == "azure_openai" and not _azure_endpoint(cfg):
+        raise LLMError("Azure OpenAI isn't set up: enter your endpoint and deployment in Settings.")
+    if cfg.provider in KEY_ENV and not api_key:
         raise LLMError(
-            "Azure OpenAI isn't set up: add azure_endpoint (and azure_deployment) under [llm] "
-            "in config.toml, or set the AZURE_OPENAI_ENDPOINT environment variable."
-        )
-    env = _KEY_ENV.get(cfg.provider)
-    if env and not os.environ.get(env):
-        raise LLMError(
-            f"No API key for {name}: set the {env} environment variable before starting "
-            "Scribely. Keys are never stored in config.toml."
+            f"No API key for {name}: add it in Settings (or set {KEY_ENV[cfg.provider]})."
         )
 
 
-async def check_llm(cfg: LLMConfig) -> None:
-    """Validate settings without spending tokens; for Ollama, confirm the model is pulled."""
-    _check_settings(cfg)
-    if cfg.provider != "ollama":
-        return
-    url = cfg.ollama_host.rstrip("/") + "/api/tags"
+async def list_ollama_models(host: str, timeout: float = 5.0) -> list[str]:
+    """Names of models pulled in Ollama; raises LLMError if it isn't reachable."""
+    url = host.rstrip("/") + "/api/tags"
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.get(url)
             resp.raise_for_status()
-            names = {m.get("name", "") for m in resp.json().get("models", [])}
+            return sorted(m.get("name", "") for m in resp.json().get("models", []))
     except (httpx.HTTPError, ValueError) as err:
         raise LLMError(
-            f"Can't reach Ollama at {cfg.ollama_host} ({err.__class__.__name__}). Start it with "
-            "`ollama serve`, or fix ollama_host under [llm] in config.toml."
+            f"Can't reach Ollama at {host} ({err.__class__.__name__}). Start it with "
+            "`ollama serve`, or fix the Ollama host in Settings."
         ) from None
+
+
+async def check_llm(cfg: LLMConfig, api_key: str | None = None) -> None:
+    """Validate settings without spending tokens; for Ollama, confirm the model is pulled."""
+    _check_settings(cfg, api_key)
+    if cfg.provider != "ollama":
+        return
+    names = set(await list_ollama_models(cfg.ollama_host))
     wanted = cfg.model if ":" in cfg.model else f"{cfg.model}:latest"
     if cfg.model not in names and wanted not in names:
         raise LLMError(
@@ -169,12 +174,11 @@ def explain_error(err: Exception, cfg: LLMConfig) -> LLMError:
         getattr(err, "response", None), "status_code", None
     )
     if "Authentication" in kind or status in (401, 403):
-        env = _KEY_ENV.get(cfg.provider, "API key")
-        return LLMError(f"{name} rejected the API key. Check the {env} environment variable.")
+        return LLMError(f"{name} rejected the API key. Update it in Settings.")
     if "NotFound" in kind or status == 404:
         what = "deployment" if cfg.provider == "azure_openai" else "model"
         target = cfg.azure_deployment or cfg.model if cfg.provider == "azure_openai" else cfg.model
-        return LLMError(f'{name} couldn\'t find the {what} "{target}". Check [llm] in config.toml.')
+        return LLMError(f'{name} couldn\'t find the {what} "{target}". Check it in Settings.')
     if "RateLimit" in kind or status == 429:
         return LLMError(
             f"{name} is rate-limiting requests or the quota is used up. Try again later."
