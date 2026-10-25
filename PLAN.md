@@ -69,7 +69,7 @@ The hardest, most platform-specific piece — de-risk it early.
 
 - **6.0 LLM factory** — `llm_factory.get_llm(cfg)` resolves `AzureChatOpenAI` (default, `gpt-4o`), `ChatAnthropic`, `ChatOpenAI`, `ChatGoogleGenerativeAI`, or `ChatOllama` from `config.toml`, plus the model's context window for chunking.
   - D: 0.2 · DoD: switching provider/model is a config-only change; a misconfigured provider yields a plain-language error.
-- **6.1 LangGraph graph** — state + nodes: `structure` → (`summarize` | `restructure`) → `export`; SQLite checkpointer. ✅ (first cut) `single` for short transcripts, `map` → `reduce` (with collapse) for long ones; notes saved per session in SQLite, so Summarize again / restructure never needs the transcript re-chunked state.
+- **6.1 LangGraph graph** — state + nodes: `structure` → (`summarize` | `restructure`) → `export`; SQLite checkpointer. ✅ (first cut) `single` for short transcripts, `map` → `reduce` (with collapse) for long ones; notes are saved per session in SQLite (instead of a LangGraph checkpointer), so they reload instantly and later steps (restructure, export) start from the saved notes.
 - **6.2 Structure node** — `get_llm(cfg).with_structured_output(NoteDoc)`; map-reduce chunking sized to the model's context window; timestamps preserved.
 - **6.3 Summarize / restructure nodes** — re-runnable on existing notes without redoing structure.
   - D: 3.1, 4.1, 6.0 · DoD: a finished transcript yields a validated `NoteDoc`; summarize/restructure run independently and cheaply.
