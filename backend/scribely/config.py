@@ -64,6 +64,26 @@ class CaptureConfig(_Section):
         return self
 
 
+class SttConfig(_Section):
+    # A faster-whisper size (tiny, base, small, medium, large-v3, distil-large-v3, ...),
+    # a Hugging Face repo id, or a local CTranslate2 model folder.
+    model: str = Field(default="small", min_length=1)
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    # CTranslate2 compute type, e.g. int8 or float16; "default" lets it choose per device.
+    compute_type: str = "default"
+    # Spoken language code such as "en"; None auto-detects per segment.
+    language: str | None = None
+    beam_size: int = Field(default=5, ge=1)
+    vad_threshold: float = Field(default=0.5, gt=0.0, lt=1.0)
+    # A pause this long ends a transcript segment.
+    min_silence_ms: int = Field(default=600, ge=100)
+    speech_pad_ms: int = Field(default=200, ge=0)
+    # Continuous speech is cut (at the longest pause) once a segment reaches this length.
+    max_segment_seconds: float = Field(default=15.0, ge=2.0)
+    # How often to emit live partial hypotheses while someone is speaking; 0 disables.
+    partial_interval_seconds: float = Field(default=1.0, ge=0.0)
+
+
 class LLMConfig(_Section):
     provider: LLMProvider = "azure_openai"
     model: str = Field(default="gpt-4o", min_length=1)
@@ -90,6 +110,7 @@ class PipelineConfig(_Section):
 class PathsConfig(_Section):
     data_dir: Path | None = None
     exports_dir: Path | None = None
+    models_dir: Path | None = None
 
     def resolved_data_dir(self) -> Path:
         if self.data_dir is not None:
@@ -100,6 +121,11 @@ class PathsConfig(_Section):
         if self.exports_dir is not None:
             return self.exports_dir.expanduser()
         return self.resolved_data_dir() / "exports"
+
+    def resolved_models_dir(self) -> Path:
+        if self.models_dir is not None:
+            return self.models_dir.expanduser()
+        return self.resolved_data_dir() / "models"
 
 
 class LoggingConfig(_Section):
@@ -116,6 +142,7 @@ class Settings(BaseSettings):
 
     server: ServerConfig = ServerConfig()
     capture: CaptureConfig = CaptureConfig()
+    stt: SttConfig = SttConfig()
     llm: LLMConfig = LLMConfig()
     pipeline: PipelineConfig = PipelineConfig()
     paths: PathsConfig = PathsConfig()

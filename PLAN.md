@@ -33,7 +33,7 @@ The hardest, most platform-specific piece — de-risk it early.
 ## Phase 2 · Live transcription (STT)
 
 - **2.1 faster-whisper wrapper** — load model, transcribe chunked audio with timestamps; VAD segmentation (Silero, bundled with faster-whisper) to cut the stream at speech pauses.
-- **2.2 Streaming loop** — feed capture chunks → rolling, timestamped transcript; tune chunk/VAD for latency vs accuracy.
+- **2.2 Streaming loop** — feed capture chunks → rolling, timestamped transcript; final segments at VAD pauses (or cut at the longest pause after `max_segment_seconds`), plus live partial hypotheses that back off when the CPU can't keep up. `scribely-transcribe-check` prints the live transcript in a terminal.
   - D: 1.3 · DoD: speaking into a captured source produces timestamped transcript text within ~1–2s, continuously.
 
 ---
