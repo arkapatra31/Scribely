@@ -26,8 +26,8 @@ These shape the whole design. Do not violate them without explicit instruction.
 | Frontend | React + Tailwind + Framer Motion |
 | UI ↔ backend | WebSocket (live transcript + note ops) to a local FastAPI sidecar |
 | Backend core | FastAPI + asyncio |
-| Audio capture | WASAPI loopback (Windows) · ScreenCaptureKit (macOS) · `sounddevice` · VAD |
-| Transcription (STT) | `faster-whisper` (CTranslate2), chunked streaming |
+| Audio capture | WASAPI loopback via `PyAudioWPatch` (Windows) · ScreenCaptureKit via PyObjC (macOS) · `soxr` resampling to 16 kHz mono · WAV `file` backend for dev/tests |
+| Transcription (STT) | `faster-whisper` (CTranslate2), chunked streaming + VAD |
 | Session state | SQLite (WAL mode) + in-memory rolling window for live display |
 | Notes pipeline | LangGraph + LangChain provider packages (`langchain-openai`, `langchain-anthropic`, `langchain-google-genai`, `langchain-ollama`) + Pydantic structured output |
 | Model runtime | **Azure OpenAI** (default, `gpt-4o`); `anthropic` (`langchain-anthropic`), `openai`, `gemini` (`langchain-google-genai`), and Ollama (`langchain-ollama`) supported via config |
@@ -86,6 +86,7 @@ Scribely/                 # repo root
 # backend (Python) — run from backend/; uv manages the isolated backend/.venv
 uv sync                                   # create/update .venv from uv.lock
 uv run scribely-backend                   # start FastAPI sidecar (127.0.0.1:8765)
+uv run scribely-capture-check            # record 10 s of system audio to capture-check.wav
 uv run pytest                             # tests
 uv run ruff check . && uv run ruff format --check . && uv run mypy .   # lint + format + types
 

@@ -138,3 +138,6 @@ app_data/
 
 # Jinja2 compiled template cache
 __jinja2_cache__/
+
+# scribely-capture-check output
+capture-check.wav

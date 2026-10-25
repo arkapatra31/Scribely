@@ -10,10 +10,18 @@ dependencies = [
     "pydantic-settings>=2.6",
     "platformdirs>=4.3",
     "structlog>=24.4",
+    "numpy>=2.5.4",
+    "soxr>=1.1.0",
+    "pyaudiowpatch>=0.2.12.9 ; sys_platform == 'win32'",
+    "pyobjc-framework-screencapturekit>=12.2.2 ; sys_platform == 'darwin'",
+    "pyobjc-framework-coremedia>=12.2.2 ; sys_platform == 'darwin'",
+    "pyobjc-framework-quartz>=12.2.2 ; sys_platform == 'darwin'",
+    "pyobjc-framework-libdispatch>=12.2.2 ; sys_platform == 'darwin'",
 ]
 
 [project.scripts]
 scribely-backend = "scribely.__main__:main"
+scribely-capture-check = "scribely.capture.check:main"
 
 [dependency-groups]
 dev = [
@@ -41,6 +49,11 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Platform-only (PyAudioWPatch on Windows, PyObjC on macOS) or untyped packages.
+module = ["pyaudiowpatch", "objc", "Foundation", "CoreMedia", "Quartz", "ScreenCaptureKit", "dispatch", "soxr"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
