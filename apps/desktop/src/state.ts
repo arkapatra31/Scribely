@@ -1,5 +1,7 @@
 import type {
   ErrorMessage,
+  NotesJobMessage,
+  SessionNotes,
   Session,
   SessionSummary,
   StatusMessage,
@@ -21,6 +23,10 @@ export interface AppState {
   partial: TranscriptPartialMessage | null;
   sessions: SessionSummary[];
   view: View;
+  /** Generated notes by session id. */
+  notes: Record<string, SessionNotes>;
+  /** Latest summarize progress by session id. */
+  jobs: Record<string, NotesJobMessage>;
   error: ErrorMessage | null;
 }
 
@@ -37,6 +43,8 @@ export const initialState: AppState = {
   partial: null,
   sessions: [],
   view: { kind: "live" },
+  notes: {},
+  jobs: {},
   error: null,
 };
 
@@ -83,14 +91,23 @@ function applyMessage(state: AppState, message: ServerMessage): AppState {
     case "sessions":
       return { ...state, sessions: message.sessions, view: syncView(state.view, message.sessions) };
     case "session_opened": {
-      const isLive = message.session.id === state.status?.session?.id;
+      const recordingIt =
+        message.session.id === state.status?.session?.id && state.status?.state !== "idle";
+      const notes = message.notes
+        ? { ...state.notes, [message.session.id]: message.notes }
+        : state.notes;
       return {
         ...state,
-        view: isLive
+        notes,
+        view: recordingIt
           ? { kind: "live" }
           : { kind: "saved", session: message.session, segments: message.segments },
       };
     }
+    case "notes_job":
+      return { ...state, jobs: { ...state.jobs, [message.session_id]: message } };
+    case "notes":
+      return { ...state, notes: { ...state.notes, [message.notes.session_id]: message.notes } };
     case "error":
       return { ...state, error: message };
   }

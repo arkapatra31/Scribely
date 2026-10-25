@@ -69,7 +69,7 @@ The hardest, most platform-specific piece — de-risk it early.
 
 - **6.0 LLM factory** — `llm_factory.get_llm(cfg)` resolves `AzureChatOpenAI` (default, `gpt-4o`), `ChatAnthropic`, `ChatOpenAI`, `ChatGoogleGenerativeAI`, or `ChatOllama` from `config.toml`, plus the model's context window for chunking.
   - D: 0.2 · DoD: switching provider/model is a config-only change; a misconfigured provider yields a plain-language error.
-- **6.1 LangGraph graph** — state + nodes: `structure` → (`summarize` | `restructure`) → `export`; SQLite checkpointer.
+- **6.1 LangGraph graph** — state + nodes: `structure` → (`summarize` | `restructure`) → `export`; SQLite checkpointer. ✅ (first cut) `single` for short transcripts, `map` → `reduce` (with collapse) for long ones; notes saved per session in SQLite, so Summarize again / restructure never needs the transcript re-chunked state.
 - **6.2 Structure node** — `get_llm(cfg).with_structured_output(NoteDoc)`; map-reduce chunking sized to the model's context window; timestamps preserved.
 - **6.3 Summarize / restructure nodes** — re-runnable on existing notes without redoing structure.
   - D: 3.1, 4.1, 6.0 · DoD: a finished transcript yields a validated `NoteDoc`; summarize/restructure run independently and cheaply.
@@ -78,8 +78,8 @@ The hardest, most platform-specific piece — de-risk it early.
 
 ## Phase 7 · Notes UI
 
-- **7.1 Notes viewer** — render `NoteDoc` sections + timestamp chips that jump back to the video moment.
-- **7.2 Actions** — Summarize / Restructure / Export buttons wired to the pipeline over WS; quiet toasts, loading states. Available on any stopped session opened from the list — summarizing is on demand, never automatic.
+- **7.1 Notes viewer** — render `NoteDoc` sections + timestamp chips that jump back to the video moment. ✅ Notes/Transcript tabs; timestamps jump to the transcript line (jumping the video itself needs a player integration).
+- **7.2 Actions** — Summarize / Restructure / Export buttons wired to the pipeline over WS; quiet toasts, loading states. Available on any stopped session opened from the list — summarizing is on demand, never automatic. ✅ Summarize / Summarize again with live progress; Restructure and Export pending.
 - **7.3 Editor** — light inline editing of generated notes.
   - D: 5.2, 6.3 · DoD: stop a session → notes appear → user can summarize, restructure, and edit.
 

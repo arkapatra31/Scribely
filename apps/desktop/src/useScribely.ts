@@ -35,6 +35,10 @@ export function useScribely(url: string = DEFAULT_WS_URL) {
       (session_id: string) => send({ type: "delete_session", session_id }),
       [send],
     ),
+    summarize: useCallback(
+      (session_id: string) => send({ type: "summarize", session_id }),
+      [send],
+    ),
     showLive: useCallback(() => dispatch({ kind: "showLive" }), []),
     dismissError: useCallback(() => dispatch({ kind: "dismissError" }), []),
   };

@@ -7,17 +7,30 @@ interface Props {
   segments: TranscriptSegment[];
   partial: TranscriptPartialMessage | null;
   emptyMessage: string;
+  /** Scroll to (and highlight) the segment at this time, in seconds. */
+  focusTime?: number | null;
 }
 
-export function Transcript({ segments, partial, emptyMessage }: Props) {
+export function Transcript({ segments, partial, emptyMessage, focusTime = null }: Props) {
   const reduceMotion = useReducedMotion();
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
 
+  const focusIndex =
+    focusTime === null
+      ? null
+      : (segments.find((s) => s.end >= focusTime)?.index ?? segments[segments.length - 1]?.index ?? null);
+
   useEffect(() => {
     const el = scroller.current;
-    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
-  }, [segments, partial]);
+    if (!el) return;
+    if (focusIndex !== null) {
+      stickToBottom.current = false;
+      el.querySelector(`[data-index="${focusIndex}"]`)?.scrollIntoView({ block: "center" });
+    } else if (stickToBottom.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [segments, partial, focusIndex]);
 
   const onScroll = () => {
     const el = scroller.current;
@@ -42,7 +55,10 @@ export function Transcript({ segments, partial, emptyMessage }: Props) {
               initial={reduceMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="flex gap-4"
+              data-index={s.index}
+              className={`-mx-2 flex gap-4 rounded px-2 ${
+                s.index === focusIndex ? "bg-amber-100/70 dark:bg-amber-900/30" : ""
+              }`}
             >
               <Timestamp seconds={s.start} />
               <p className="leading-relaxed">{s.text}</p>

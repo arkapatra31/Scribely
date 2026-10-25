@@ -76,6 +76,7 @@ function SessionItem({ summary, selected, recording, onOpen, onDelete }: ItemPro
               {session.title && <>{formatDate(session.started_at)} · </>}
               {formatClock(duration)}
               {segment_count === 0 && " · empty"}
+              {summary.has_notes && <span className="text-emerald-600"> · notes</span>}
               {session.status === "interrupted" && <span className="text-amber-600"> · interrupted</span>}
               {session.status === "failed" && <span className="text-amber-600"> · failed</span>}
             </>
