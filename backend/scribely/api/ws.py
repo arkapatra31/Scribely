@@ -12,13 +12,16 @@ from scribely.models import (
     ClientMessage,
     DeleteSessionCommand,
     ErrorMessage,
+    GetLlmSettingsCommand,
     ListSessionsCommand,
     OpenSessionCommand,
     RenameSessionCommand,
+    SaveLlmSettingsCommand,
     ServerMessage,
     StartCommand,
     StopCommand,
     SummarizeCommand,
+    TestLlmCommand,
 )
 from scribely.session import LiveSessionManager, SessionError
 
@@ -46,11 +49,9 @@ def register_ws(app: FastAPI, manager: LiveSessionManager, allowed_origins: list
                 raw = await websocket.receive_text()
                 try:
                     command = _client_messages.validate_json(raw)
-                except ValidationError:
+                except ValidationError as err:
                     queue.put_nowait(
-                        ErrorMessage(
-                            type="error", code="bad_message", message="Unrecognised command."
-                        )
+                        ErrorMessage(type="error", code="bad_message", message=_describe(err))
                     )
                     continue
                 await _handle(command, manager, queue)
@@ -83,8 +84,22 @@ async def _handle(
                 await manager.delete_session(command.session_id)
             case SummarizeCommand():
                 await manager.summarize(command.session_id)
+            case GetLlmSettingsCommand():
+                queue.put_nowait(await manager.llm_settings_message())
+            case SaveLlmSettingsCommand():
+                await manager.save_llm_settings(command.settings, command.api_key)
+            case TestLlmCommand():
+                queue.put_nowait(await manager.test_llm())
     except SessionError as err:
         queue.put_nowait(ErrorMessage(type="error", code=err.code, message=err.message))
+
+
+def _describe(err: ValidationError) -> str:
+    """First validation problem in plain words, e.g. a bad value typed in Settings."""
+    first = err.errors()[0]
+    if first["type"] == "union_tag_invalid" or first["loc"] == ():
+        return "Unrecognised command."
+    return str(first["msg"]).removeprefix("Value error, ")
 
 
 async def _send_loop(websocket: WebSocket, queue: asyncio.Queue[ServerMessage]) -> None:

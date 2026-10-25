@@ -13,6 +13,7 @@ from scribely.capture.base import AudioCapture, CaptureError, CapturePermissionE
 from scribely.capture.dsp import TARGET_SAMPLE_RATE as SR
 from scribely.capture.file import FileCapture
 from scribely.config import LLMConfig, Settings, SttConfig
+from scribely.credentials import Credentials
 from scribely.models import (
     ErrorMessage,
     ServerMessage,
@@ -47,7 +48,8 @@ def make_manager(
         transcriber=transcriber or LoadableFakeTranscriber(),
         capture_factory=capture_factory,
         vad_factory=EnergyVAD,
-        llm_factory=lambda cfg: fake_llm.as_chat_model(),
+        llm_factory=lambda cfg, key: fake_llm.as_chat_model(),
+        credentials=Credentials(),
     )
 
 

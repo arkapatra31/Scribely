@@ -8,6 +8,7 @@ about once a second while recording.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -18,10 +19,14 @@ from langchain_core.language_models import BaseChatModel
 
 from scribely.capture import AudioCapture, CaptureError, CapturePermissionError, create_capture
 from scribely.config import LLMConfig, Settings
+from scribely.credentials import Credentials
 from scribely.models import (
     BackendState,
     ErrorCode,
     ErrorMessage,
+    LlmSettings,
+    LlmSettingsMessage,
+    LlmTestMessage,
     NotesJobMessage,
     NotesMessage,
     ServerMessage,
@@ -37,12 +42,18 @@ from scribely.models import (
     TranscriptSnapshot,
 )
 from scribely.pipeline import LLMError, check_llm, generate_notes, get_llm
-from scribely.pipeline.llm_factory import provider_name
+from scribely.pipeline.llm_factory import (
+    SUGGESTED_MODELS,
+    explain_error,
+    list_ollama_models,
+    provider_name,
+)
 from scribely.session.store import SessionStore, StorageError
 from scribely.stt import SileroVAD, SpeechDetector, StreamingTranscriber, STTError
 from scribely.stt.transcriber import Transcriber, WhisperTranscriber
 
 SUBSCRIBER_QUEUE_SIZE = 1000
+LLM_SETTINGS_KEY = "llm"
 FLUSH_INTERVAL_SECONDS = 1.0
 
 log = structlog.get_logger(__name__)
@@ -70,7 +81,8 @@ class LiveSessionManager:
         transcriber: LoadableTranscriber | None = None,
         capture_factory: Callable[[], AudioCapture] | None = None,
         vad_factory: Callable[[], SpeechDetector] | None = None,
-        llm_factory: Callable[[LLMConfig], BaseChatModel] = get_llm,
+        llm_factory: Callable[[LLMConfig, str | None], BaseChatModel] = get_llm,
+        credentials: Credentials | None = None,
     ) -> None:
         self._settings = settings
         self._store = store
@@ -92,6 +104,7 @@ class LiveSessionManager:
         self._storage_warned = False
         self._notes_jobs: dict[str, asyncio.Task[None]] = {}
         self._llm_factory = llm_factory
+        self._credentials = credentials or Credentials()
         self._llm_issue: str | None = None
 
     @property
@@ -378,7 +391,8 @@ class LiveSessionManager:
     async def check_llm_setup(self) -> None:
         """Validate the notes LLM settings (startup and before each summarize)."""
         try:
-            await check_llm(self._settings.llm)
+            cfg = self._settings.llm
+            await check_llm(cfg, self._credentials.get(cfg.provider))
         except LLMError as err:
             issue: str | None = str(err)
             log.warning("llm.not_ready", issue=issue)
@@ -430,7 +444,8 @@ class LiveSessionManager:
             if self._llm_issue is not None:
                 raise LLMError(self._llm_issue)
             await progress(f"Sending the transcript to {provider_name(cfg)} ({cfg.model})…")
-            doc = await generate_notes(segments, self._llm_factory(cfg), self._settings, progress)
+            llm = self._llm_factory(cfg, self._credentials.get(cfg.provider))
+            doc = await generate_notes(segments, llm, self._settings, progress)
             notes = SessionNotes(
                 session_id=session_id,
                 doc=doc,
@@ -466,3 +481,79 @@ class LiveSessionManager:
             )
         )
         self._broadcast(ErrorMessage(type="error", code="llm_failed", message=message))
+
+    # --- LLM settings (Settings panel) ------------------------------------------------------
+
+    async def load_saved_llm_settings(self) -> None:
+        """Apply LLM settings saved from the Settings panel; they override config.toml."""
+        try:
+            raw = await self._store.get_setting(LLM_SETTINGS_KEY)
+        except StorageError as err:
+            log.warning("settings.load_failed", error=str(err))
+            return
+        if raw is None:
+            return
+        try:
+            saved = LlmSettings.model_validate_json(raw)
+        except ValueError:
+            log.warning("settings.invalid_saved_llm_settings")
+            return
+        self._apply_llm_settings(saved)
+
+    def _apply_llm_settings(self, saved: LlmSettings) -> None:
+        llm = self._settings.llm.model_copy(update=saved.model_dump())
+        self._settings = self._settings.model_copy(update={"llm": llm})
+
+    def _current_llm_settings(self) -> LlmSettings:
+        cfg = self._settings.llm
+        return LlmSettings.model_validate(
+            cfg.model_dump(include=set(LlmSettings.model_fields)), strict=False
+        )
+
+    async def llm_settings_message(self) -> LlmSettingsMessage:
+        ollama_models: list[str] = []
+        if self._settings.llm.provider == "ollama":
+            with contextlib.suppress(LLMError):  # status.llm_issue explains it
+                host = self._settings.llm.ollama_host
+                ollama_models = await list_ollama_models(host, timeout=2.0)
+        return LlmSettingsMessage(
+            type="llm_settings",
+            settings=self._current_llm_settings(),
+            key_sources={p: self._credentials.source(p) for p in SUGGESTED_MODELS},  # type: ignore[arg-type]
+            suggested_models=SUGGESTED_MODELS,
+            ollama_models=ollama_models,
+        )
+
+    async def save_llm_settings(self, settings: LlmSettings, api_key: str | None) -> None:
+        try:
+            # Only the non-secret settings are saved; the key stays in memory.
+            await self._store.set_setting(LLM_SETTINGS_KEY, settings.model_dump_json())
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        if api_key is not None:
+            if api_key.strip():
+                self._credentials.set(settings.provider, api_key.strip())
+            else:
+                self._credentials.clear(settings.provider)
+        self._apply_llm_settings(settings)
+        log.info("settings.llm_saved", provider=settings.provider, model=settings.model)
+        self._broadcast(await self.llm_settings_message())
+        await self.check_llm_setup()
+        self._broadcast(self._status())
+
+    async def test_llm(self) -> LlmTestMessage:
+        """One tiny real request, so users know the key and model work before summarizing."""
+        cfg = self._settings.llm
+        try:
+            await check_llm(cfg, self._credentials.get(cfg.provider))
+            llm = self._llm_factory(cfg, self._credentials.get(cfg.provider))
+            await asyncio.wait_for(llm.ainvoke("Reply with the single word OK."), timeout=30)
+        except TimeoutError:
+            return LlmTestMessage(
+                type="llm_test", ok=False, message=f"{provider_name(cfg)} didn't answer in 30 s."
+            )
+        except Exception as err:
+            return LlmTestMessage(type="llm_test", ok=False, message=str(explain_error(err, cfg)))
+        return LlmTestMessage(
+            type="llm_test", ok=True, message=f"Connected to {provider_name(cfg)} ({cfg.model})."
+        )

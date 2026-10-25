@@ -159,7 +159,7 @@ def test_provider_errors_become_plain_language() -> None:
     def boom(schema: type[BaseModel], prompt: str) -> BaseModel:
         raise AuthenticationError("Incorrect API key provided: sk-…")
 
-    with pytest.raises(LLMError, match=r"rejected the API key.*AZURE_OPENAI_API_KEY"):
+    with pytest.raises(LLMError, match=r"rejected the API key\. Update it in Settings"):
         asyncio.run(generate_notes(segments(5), FakeLLM(boom).as_chat_model(), settings()))
 
 

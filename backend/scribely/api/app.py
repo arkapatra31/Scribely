@@ -20,6 +20,7 @@ def create_app(settings: Settings, live: LiveSessionManager) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         live.warm_up()
+        await live.load_saved_llm_settings()
         llm_check = asyncio.create_task(live.check_llm_setup())
         yield
         llm_check.cancel()

@@ -9,7 +9,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from scribely.config import LLMProvider
 
 # interrupted: the app quit or crashed mid-recording; saved segments were recovered.
 SessionStatus = Literal["recording", "stopped", "interrupted", "failed"]
@@ -110,6 +112,9 @@ ErrorCode = Literal[
     "internal",
 ]
 NotesJobState = Literal["running", "done", "failed"]
+# Where the API key for a provider comes from. Keys are never stored: "session" means
+# entered in Settings since the backend started (memory only).
+KeySource = Literal["session", "env", "missing", "not_needed"]
 
 
 class StartCommand(Schema):
@@ -154,6 +159,52 @@ class SummarizeCommand(Schema):
 
     type: Literal["summarize"]
     session_id: str
+
+
+class LlmSettings(Schema):
+    """The notes LLM, as edited in the Settings panel (API keys travel separately)."""
+
+    provider: LLMProvider
+    model: str = Field(min_length=1, max_length=200)
+    azure_endpoint: str | None = Field(default=None, max_length=500)
+    azure_deployment: str | None = Field(default=None, max_length=200)
+    azure_api_version: str = Field(min_length=1, max_length=50)
+    ollama_host: str = Field(min_length=1, max_length=500)
+    temperature: float = Field(ge=0.0, le=2.0)
+
+    @field_validator(
+        "model", "azure_endpoint", "azure_deployment", "azure_api_version", "ollama_host"
+    )
+    @classmethod
+    def _strip(cls, value: str | None) -> str | None:
+        return value.strip() or None if isinstance(value, str) else value
+
+    @field_validator("azure_endpoint")
+    @classmethod
+    def _https(cls, value: str | None) -> str | None:
+        if value is not None and not value.startswith("https://"):
+            raise ValueError("The Azure endpoint must start with https://")
+        return value
+
+
+class GetLlmSettingsCommand(Schema):
+    type: Literal["get_llm_settings"]
+
+
+class SaveLlmSettingsCommand(Schema):
+    """Client -> server: save LLM settings. ``api_key``: None keeps the key already entered
+    this session, "" forgets it, anything else replaces it. Keys are kept in memory only and
+    never stored."""
+
+    type: Literal["save_llm_settings"]
+    settings: LlmSettings
+    api_key: str | None = Field(default=None, max_length=1000)
+
+
+class TestLlmCommand(Schema):
+    """Client -> server: make one tiny request with the saved settings."""
+
+    type: Literal["test_llm"]
 
 
 class StatusMessage(Schema):
@@ -224,6 +275,22 @@ class NotesMessage(Schema):
     notes: SessionNotes
 
 
+class LlmSettingsMessage(Schema):
+    """Server -> client: current LLM settings, without any secrets."""
+
+    type: Literal["llm_settings"]
+    settings: LlmSettings
+    key_sources: dict[str, KeySource]
+    suggested_models: dict[str, list[str]]
+    ollama_models: list[str] = Field(description="Models pulled in Ollama, if it's reachable.")
+
+
+class LlmTestMessage(Schema):
+    type: Literal["llm_test"]
+    ok: bool
+    message: str
+
+
 class ErrorMessage(Schema):
     """Server -> client: a plain-language problem to show the user."""
 
@@ -239,7 +306,10 @@ ClientMessage = Annotated[
     | OpenSessionCommand
     | RenameSessionCommand
     | DeleteSessionCommand
-    | SummarizeCommand,
+    | SummarizeCommand
+    | GetLlmSettingsCommand
+    | SaveLlmSettingsCommand
+    | TestLlmCommand,
     Field(discriminator="type"),
 ]
 ServerMessage = Annotated[
@@ -251,6 +321,8 @@ ServerMessage = Annotated[
     | SessionOpenedMessage
     | NotesJobMessage
     | NotesMessage
+    | LlmSettingsMessage
+    | LlmTestMessage
     | ErrorMessage,
     Field(discriminator="type"),
 ]

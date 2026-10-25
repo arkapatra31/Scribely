@@ -61,6 +61,12 @@ MIGRATIONS: list[str] = [
         created_at  TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE settings (
+        key    TEXT PRIMARY KEY,
+        value  TEXT NOT NULL
+    );
+    """,
 ]
 
 
@@ -130,6 +136,12 @@ class SessionStore:
 
     async def delete_session(self, session_id: str) -> bool:
         return await self._run(self._delete_blocking, session_id)
+
+    async def get_setting(self, key: str) -> str | None:
+        return await self._run(self._get_setting_blocking, key)
+
+    async def set_setting(self, key: str, value: str) -> None:
+        await self._run(self._set_setting_blocking, key, value)
 
     async def save_notes(self, notes: SessionNotes) -> None:
         await self._run(self._save_notes_blocking, notes)
@@ -245,6 +257,17 @@ class SessionStore:
             )
             for r in rows
         ]
+
+    def _get_setting_blocking(self, key: str) -> str | None:
+        row = self._db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return None if row is None else str(row["value"])
+
+    def _set_setting_blocking(self, key: str, value: str) -> None:
+        self._db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
 
     def _save_notes_blocking(self, notes: SessionNotes) -> None:
         self._db.execute(
