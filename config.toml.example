@@ -24,6 +24,19 @@ backend = "auto"            # auto | wasapi (Windows) | screencapturekit (macOS)
 file_realtime = true
 max_queue_seconds = 120.0   # audio buffered for a slow consumer before the oldest is dropped
 
+[stt]
+# Models are downloaded once from Hugging Face into models_dir; audio never leaves the machine.
+model = "small"             # tiny | base | small | medium | large-v3 | distil-large-v3 | HF repo id | local dir
+device = "auto"             # auto | cpu | cuda
+compute_type = "default"    # e.g. int8 (fast on CPU), float16 (GPU); default lets CTranslate2 choose
+# language = "en"           # set it for best results; unset auto-detects per segment
+beam_size = 5
+vad_threshold = 0.5
+min_silence_ms = 600        # pause that ends a transcript segment
+speech_pad_ms = 200
+max_segment_seconds = 15.0  # continuous speech is cut at the longest pause after this
+partial_interval_seconds = 1.0   # live partial hypotheses while speaking; 0 disables
+
 [llm]
 provider = "azure_openai"   # azure_openai | anthropic | openai | gemini | ollama
 model = "gpt-4o"            # for azure_openai, the model behind your deployment
@@ -41,6 +54,7 @@ chunk_overlap_tokens = 200
 [paths]
 # data_dir = "~/Scribely"         # default: per-user data dir via platformdirs
 # exports_dir = "~/Scribely/exports"
+# models_dir = "~/Scribely/models"  # speech models; downloaded here on first use
 
 [logging]
 level = "INFO"       # DEBUG | INFO | WARNING | ERROR
