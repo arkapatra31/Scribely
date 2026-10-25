@@ -30,7 +30,7 @@ def test_file_overrides_defaults(tmp_path: Path) -> None:
     settings = load_settings(path)
     assert settings.llm.provider == "anthropic"
     assert settings.llm.model == "claude-x"
-    assert settings.llm.temperature == 0.2
+    assert settings.llm.temperature is None
 
 
 def test_env_overrides_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

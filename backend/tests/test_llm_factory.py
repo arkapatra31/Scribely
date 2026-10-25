@@ -87,3 +87,25 @@ def test_ollama_check_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
     _mock_ollama(monkeypatch, refuse)
     with pytest.raises(LLMError, match=r"Can't reach Ollama.*ollama serve"):
         asyncio.run(check_llm(LLMConfig(provider="ollama", model="llama3.1")))
+
+
+def test_temperature_is_only_sent_when_configured() -> None:
+    default = get_llm(LLMConfig(provider="anthropic", model="claude-sonnet-5-5"), "k")
+    assert default.temperature is None  # type: ignore[attr-defined]
+    custom = get_llm(LLMConfig(provider="anthropic", model="claude-x", temperature=0.3), "k")
+    assert custom.temperature == 0.3  # type: ignore[attr-defined]
+    ollama = get_llm(LLMConfig(provider="ollama", model="llama3.1"))
+    assert ollama.temperature is None  # type: ignore[attr-defined]
+
+
+def test_rejected_custom_temperature_is_explained() -> None:
+    from scribely.pipeline.llm_factory import explain_error
+
+    class BadRequestError(Exception):
+        status_code = 400
+
+    err = BadRequestError(
+        "`temperature` is not supported for claude-sonnet-5-5 at non-default values."
+    )
+    cfg = LLMConfig(provider="anthropic", model="claude-sonnet-5-5", temperature=0.2)
+    assert "Remove temperature from [llm]" in str(explain_error(err, cfg))

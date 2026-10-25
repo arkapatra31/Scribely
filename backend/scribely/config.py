@@ -95,7 +95,9 @@ class SttConfig(_Section):
 class LLMConfig(_Section):
     provider: LLMProvider = "azure_openai"
     model: str = Field(default="gpt-4o", min_length=1)
-    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    # None uses the model's own default. Some models (e.g. newer Claude models) reject any
+    # other value, so it's only sent when set here explicitly.
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     # Overrides the model's known context window (tokens); None means use the built-in value.
     context_window: int | None = Field(default=None, gt=0)
     azure_endpoint: str | None = None

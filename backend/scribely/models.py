@@ -170,7 +170,6 @@ class LlmSettings(Schema):
     azure_deployment: str | None = Field(default=None, max_length=200)
     azure_api_version: str = Field(min_length=1, max_length=50)
     ollama_host: str = Field(min_length=1, max_length=500)
-    temperature: float = Field(ge=0.0, le=2.0)
 
     @field_validator(
         "model", "azure_endpoint", "azure_deployment", "azure_api_version", "ollama_host"

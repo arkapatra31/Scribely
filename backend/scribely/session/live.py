@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -494,7 +495,9 @@ class LiveSessionManager:
         if raw is None:
             return
         try:
-            saved = LlmSettings.model_validate_json(raw)
+            data = json.loads(raw)
+            data.pop("temperature", None)  # saved by older versions; no longer a setting
+            saved = LlmSettings.model_validate(data)
         except ValueError:
             log.warning("settings.invalid_saved_llm_settings")
             return

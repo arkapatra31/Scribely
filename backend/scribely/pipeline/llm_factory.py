@@ -71,7 +71,9 @@ SUGGESTED_MODELS: dict[str, list[str]] = {
 def get_llm(cfg: LLMConfig, api_key: str | None = None) -> BaseChatModel:
     """Build the chat model for ``cfg``; raises LLMError if required settings are missing."""
     _check_settings(cfg, api_key)
-    common: dict[str, Any] = {"temperature": cfg.temperature, "max_retries": 2}
+    common: dict[str, Any] = {"max_retries": 2}
+    if cfg.temperature is not None:  # otherwise the provider's default
+        common["temperature"] = cfg.temperature
     if cfg.provider != "ollama":
         common["api_key"] = api_key
     match cfg.provider:
@@ -120,9 +122,9 @@ def get_llm(cfg: LLMConfig, api_key: str | None = None) -> BaseChatModel:
             return ChatOllama(
                 model=cfg.model,
                 base_url=cfg.ollama_host,
-                temperature=cfg.temperature,
                 num_ctx=context_window(cfg),
                 num_predict=cfg.max_output_tokens,
+                **({"temperature": cfg.temperature} if cfg.temperature is not None else {}),
             )
 
 
@@ -179,6 +181,11 @@ def explain_error(err: Exception, cfg: LLMConfig) -> LLMError:
         what = "deployment" if cfg.provider == "azure_openai" else "model"
         target = cfg.azure_deployment or cfg.model if cfg.provider == "azure_openai" else cfg.model
         return LLMError(f'{name} couldn\'t find the {what} "{target}". Check it in Settings.')
+    if "temperature" in str(err).lower() and cfg.temperature is not None:
+        return LLMError(
+            f"{name} doesn't accept a custom temperature for {cfg.model}. Remove temperature "
+            "from [llm] in config.toml to use the model's default."
+        )
     if "RateLimit" in kind or status == 429:
         return LLMError(
             f"{name} is rate-limiting requests or the quota is used up. Try again later."
