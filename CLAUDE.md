@@ -11,9 +11,9 @@ Scribely is a **local-first desktop app (macOS + Windows)** that listens to what
 These shape the whole design. Do not violate them without explicit instruction.
 
 1. **Live transcription, deferred generation.** Speech-to-text runs continuously *during* playback. The LLM (notes pipeline) runs **once, after the user stops** the session — never per-chunk during recording.
-2. **Local-first & free.** Audio, transcripts, and notes stay on the user's machine. No cloud dependency, no per-minute costs, no usage caps. Cloud is an opt-in only, never the default path.
+2. **Local-first.** Audio capture, transcription (STT), transcripts, notes, and all session data stay on the user's machine — no cloud storage, no account, no per-minute STT costs. The only data that leaves the machine is the finished transcript text, sent to the user-configured LLM provider when notes are generated. Cloud providers use the user's own API keys; Ollama is the fully offline, zero-cost option.
 3. **Model-agnostic / config-driven.** The LLM is a config value, not a hard dependency. Never hardcode a model or provider. Primary provider is **Azure OpenAI** (`gpt-4o` by default). Supported providers: `azure_openai`, `anthropic`, `openai`, `gemini`, `ollama`. A `llm_factory.py` module resolves the correct LangChain `Chat*` class from config — no other code changes required to switch. For Ollama, validate the host + model on startup (`GET /api/tags`) and surface a clear error if the model isn't pulled.
-4. **No telemetry by default.** Nothing leaves the machine unless the user explicitly opts in.
+4. **No telemetry by default.** No usage data, analytics, or crash reports leave the machine unless the user explicitly opts in.
 5. **Don't overflow context.** Read each model's context window and chunk transcripts with map-reduce so a long lecture never exceeds it.
 
 ## Locked tech stack
