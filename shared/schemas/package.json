@@ -1,0 +1,9 @@
+{
+  "name": "@scribely/schemas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TypeScript types generated from backend/scribely/models.py. Run `pnpm gen:schemas`; never edit by hand.",
+  "type": "module",
+  "types": "./models.ts",
+  "exports": "./models.ts"
+}

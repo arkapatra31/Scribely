@@ -1,0 +1,14 @@
+{
+  "name": "scribely",
+  "private": true,
+  "scripts": {
+    "gen:schemas": "uv run --frozen --project backend pydantic2ts --module scribely.models --output shared/schemas/models.ts --json2ts-cmd \"pnpm exec json2ts\" --exclude Schema",
+    "dev": "pnpm --filter @scribely/desktop tauri dev",
+    "build": "pnpm --filter @scribely/desktop tauri build",
+    "typecheck": "pnpm gen:schemas && pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15"
+  },
+  "packageManager": "pnpm@10.28.0"
+}
