@@ -23,16 +23,16 @@ Set up the skeleton both languages live in before any feature work.
 
 The hardest, most platform-specific piece — de-risk it early.
 
-- **1.1 Windows capture** — WASAPI loopback → PCM stream.
+- **1.1 Windows capture** — WASAPI loopback (`PyAudioWPatch`) → PCM stream.
 - **1.2 macOS capture** — ScreenCaptureKit audio-only → PCM stream; handle the screen-recording permission prompt + not-granted state.
-- **1.3 Unified capture interface** — one Python API (`start()/stop()/stream()`) over both backends; VAD segmentation.
+- **1.3 Unified capture interface** — one async Python API (`start()/stop()/stream()`) over both backends plus a WAV `file` backend for dev/tests; output is 16 kHz mono float32 chunks with wall-clock-aligned offsets (loopback sources go quiet during silence). `scribely-capture-check` records to WAV for hardware verification.
   - D: 0.1 · DoD: on both OSes, playing audio in any browser yields a continuous PCM stream into the backend; permission denial is handled gracefully.
 
 ---
 
 ## Phase 2 · Live transcription (STT)
 
-- **2.1 faster-whisper wrapper** — load model, transcribe chunked audio with timestamps.
+- **2.1 faster-whisper wrapper** — load model, transcribe chunked audio with timestamps; VAD segmentation (Silero, bundled with faster-whisper) to cut the stream at speech pauses.
 - **2.2 Streaming loop** — feed capture chunks → rolling, timestamped transcript; tune chunk/VAD for latency vs accuracy.
   - D: 1.3 · DoD: speaking into a captured source produces timestamped transcript text within ~1–2s, continuously.
 

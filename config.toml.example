@@ -18,6 +18,12 @@
 host = "127.0.0.1"   # keep on loopback: the sidecar is local-only
 port = 8765
 
+[capture]
+backend = "auto"            # auto | wasapi (Windows) | screencapturekit (macOS) | file
+# file_path = "lecture.wav" # 16-bit PCM WAV streamed by the "file" backend (dev/testing)
+file_realtime = true
+max_queue_seconds = 120.0   # audio buffered for a slow consumer before the oldest is dropped
+
 [llm]
 provider = "azure_openai"   # azure_openai | anthropic | openai | gemini | ollama
 model = "gpt-4o"            # for azure_openai, the model behind your deployment

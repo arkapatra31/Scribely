@@ -32,6 +32,7 @@ CONFIG_FILENAME = "config.toml"
 
 LLMProvider = Literal["azure_openai", "anthropic", "openai", "gemini", "ollama"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+CaptureBackend = Literal["auto", "wasapi", "screencapturekit", "file"]
 
 
 class ConfigError(Exception):
@@ -45,6 +46,22 @@ class _Section(BaseModel):
 class ServerConfig(_Section):
     host: str = "127.0.0.1"
     port: int = Field(default=8765, ge=1, le=65535)
+
+
+class CaptureConfig(_Section):
+    # "auto" picks wasapi on Windows and screencapturekit on macOS.
+    backend: CaptureBackend = "auto"
+    # WAV file streamed by the "file" backend (development/testing).
+    file_path: Path | None = None
+    file_realtime: bool = True
+    # Audio buffered for a slow consumer before the oldest is dropped.
+    max_queue_seconds: float = Field(default=120.0, gt=0)
+
+    @model_validator(mode="after")
+    def _file_backend_needs_path(self) -> Self:
+        if self.backend == "file" and self.file_path is None:
+            raise ValueError('backend = "file" requires file_path')
+        return self
 
 
 class LLMConfig(_Section):
@@ -98,6 +115,7 @@ class Settings(BaseSettings):
     )
 
     server: ServerConfig = ServerConfig()
+    capture: CaptureConfig = CaptureConfig()
     llm: LLMConfig = LLMConfig()
     pipeline: PipelineConfig = PipelineConfig()
     paths: PathsConfig = PathsConfig()
