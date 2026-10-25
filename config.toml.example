@@ -45,7 +45,7 @@ partial_interval_seconds = 1.0   # live partial hypotheses while speaking; 0 dis
 # Settings saved from the app's Settings panel override these values.
 provider = "azure_openai"   # azure_openai | anthropic | openai | gemini | ollama
 model = "gpt-4o"            # for azure_openai, the model behind your deployment
-temperature = 0.2
+# temperature = 0.2         # unset uses the model's default (some models reject other values)
 # context_window = 128000   # override the model's known context window (tokens)
 # azure_endpoint = "https://<resource>.openai.azure.com/"   # or AZURE_OPENAI_ENDPOINT
 # azure_deployment = "gpt-4o"

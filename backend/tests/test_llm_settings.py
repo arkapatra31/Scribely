@@ -45,7 +45,6 @@ def azure(**kw: Any) -> LlmSettings:
         "azure_deployment": "notes",
         "azure_api_version": "2024-10-21",
         "ollama_host": "http://localhost:11434",
-        "temperature": 0.2,
     }
     return LlmSettings(**{**base, **kw})
 
@@ -170,3 +169,16 @@ def test_settings_over_websocket(tmp_path: Path) -> None:
 
         ws.send_text(json.dumps({"type": "test_llm"}))
         assert until("llm_test")["ok"] is True
+
+
+def test_settings_saved_by_older_versions_still_load(tmp_path: Path) -> None:
+    db = tmp_path / "scribely.db"
+    legacy = {**azure(model="gpt-4.1").model_dump(), "temperature": 0.2}
+
+    async def run() -> tuple[str, float | None]:
+        m = manager(db)
+        await m._store.set_setting("llm", json.dumps(legacy))
+        await m.load_saved_llm_settings()
+        return (await m.llm_settings_message()).settings.model, m._settings.llm.temperature
+
+    assert asyncio.run(run()) == ("gpt-4.1", None)
