@@ -45,6 +45,7 @@ The hardest, most platform-specific piece — de-risk it early.
 - **3.1 SQLite (WAL)** — schema for sessions, transcript segments, notes, checkpoints; `platformdirs` location.
 - **3.2 Session lifecycle** — start/stop, in-memory rolling window for live display, batched durable writes; crash-safe + resumable.
   - D: 0.2, 2.2 · DoD: a recording survives an app kill mid-session and reloads from SQLite.
+- **3.3 Session list** — sidebar of saved sessions; open any past session's transcript (also while recording), rename, delete. Sessions cut off by a crash reappear as *interrupted* with their saved segments. ✅
 
 ---
 
@@ -78,7 +79,7 @@ The hardest, most platform-specific piece — de-risk it early.
 ## Phase 7 · Notes UI
 
 - **7.1 Notes viewer** — render `NoteDoc` sections + timestamp chips that jump back to the video moment.
-- **7.2 Actions** — Summarize / Restructure / Export buttons wired to the pipeline over WS; quiet toasts, loading states.
+- **7.2 Actions** — Summarize / Restructure / Export buttons wired to the pipeline over WS; quiet toasts, loading states. Available on any stopped session opened from the list — summarizing is on demand, never automatic.
 - **7.3 Editor** — light inline editing of generated notes.
   - D: 5.2, 6.3 · DoD: stop a session → notes appear → user can summarize, restructure, and edit.
 

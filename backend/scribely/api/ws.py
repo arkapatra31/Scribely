@@ -8,7 +8,17 @@ import contextlib
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 
-from scribely.models import ClientMessage, ErrorMessage, ServerMessage, StartCommand
+from scribely.models import (
+    ClientMessage,
+    DeleteSessionCommand,
+    ErrorMessage,
+    ListSessionsCommand,
+    OpenSessionCommand,
+    RenameSessionCommand,
+    ServerMessage,
+    StartCommand,
+    StopCommand,
+)
 from scribely.session import LiveSessionManager, SessionError
 
 _client_messages: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
@@ -29,6 +39,7 @@ def register_ws(app: FastAPI, manager: LiveSessionManager, allowed_origins: list
         await websocket.accept()
         queue = manager.subscribe()
         sender = asyncio.create_task(_send_loop(websocket, queue))
+        await _handle(ListSessionsCommand(type="list_sessions"), manager, queue)
         try:
             while True:
                 raw = await websocket.receive_text()
@@ -41,13 +52,7 @@ def register_ws(app: FastAPI, manager: LiveSessionManager, allowed_origins: list
                         )
                     )
                     continue
-                try:
-                    if isinstance(command, StartCommand):
-                        await manager.start(command.title)
-                    else:
-                        await manager.stop()
-                except SessionError as err:
-                    queue.put_nowait(ErrorMessage(type="error", code=err.code, message=err.message))
+                await _handle(command, manager, queue)
         except WebSocketDisconnect:
             pass
         finally:
@@ -55,6 +60,28 @@ def register_ws(app: FastAPI, manager: LiveSessionManager, allowed_origins: list
             sender.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await sender
+
+
+async def _handle(
+    command: ClientMessage, manager: LiveSessionManager, queue: asyncio.Queue[ServerMessage]
+) -> None:
+    """Run one command; replies and errors go to this client only, changes are broadcast."""
+    try:
+        match command:
+            case StartCommand():
+                await manager.start(command.title)
+            case StopCommand():
+                await manager.stop()
+            case ListSessionsCommand():
+                queue.put_nowait(await manager.sessions_message())
+            case OpenSessionCommand():
+                queue.put_nowait(await manager.open_session(command.session_id))
+            case RenameSessionCommand():
+                await manager.rename_session(command.session_id, command.title)
+            case DeleteSessionCommand():
+                await manager.delete_session(command.session_id)
+    except SessionError as err:
+        queue.put_nowait(ErrorMessage(type="error", code=err.code, message=err.message))
 
 
 async def _send_loop(websocket: WebSocket, queue: asyncio.Queue[ServerMessage]) -> None:
