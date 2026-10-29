@@ -63,13 +63,37 @@ pnpm install                 # desktop app
 
 ## 4. (Optional) Configuration file
 
-Scribely works without one: you choose the speech model, language and notes model inside the app. To change advanced defaults (for example the compute device or chunk sizes):
+Scribely works without one: you choose the speech model, language and notes model inside the app. Create it only to change advanced defaults, such as where Scribely keeps its data:
 
 ```powershell
 Copy-Item config.toml.example config.toml
 ```
 
-Settings chosen in the app override the file.
+`config.toml` sits in the repo root next to `config.toml.example` and is gitignored, so your paths and settings stay private. (`backend\scribely\config.py` is the code that reads it; don't edit that.)
+
+**Where Scribely keeps your data.** By default everything lives in `data\` inside the clone:
+
+| Folder | Contents |
+| --- | --- |
+| `data\scribely.db` | sessions, transcripts, notes, settings |
+| `data\models\` | downloaded speech models, one `models--<publisher>--<repo>` folder each |
+| `data\exports\` | exported PDFs and web pages |
+| `data\logs\` | `scribely.log` (rotated) |
+
+To keep them elsewhere, for example speech models on an external drive, uncomment and edit the `[paths]` section:
+
+```toml
+[paths]
+data_dir = 'D:\ScribelyData'                 # moves all of the above
+# or move only some folders:
+# models_dir = 'E:\ScribelyModels'
+# exports_dir = 'C:\Users\<you>\Documents\Scribely'
+# logs_dir = 'D:\ScribelyData\logs'
+```
+
+Use single quotes for Windows paths (TOML treats backslashes in double quotes as escapes), or forward slashes such as `"D:/ScribelyData"`. Absolute paths and paths relative to the repo root all work. Restart Scribely after editing. Existing files aren't moved for you: move the folders yourself, or let Scribely download the models again.
+
+Settings chosen in the app (speech model, language, notes model) override the file; folder locations can only be set here.
 
 ## 5. Start Scribely
 
