@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Scribely {{ version }}">
+<title>{{ title }}</title>
+<style>
+  :root {
+    --paper: #faf8f4; --raised: #ffffff; --ink: #1d1c1a; --muted: #6b665e; --faint: #a39d93;
+    --line: #e6e1d7; --accent: #4f46e5; --accent-soft: #eef0ff; --accent-ink: #3730a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #121110; --raised: #1b1a18; --ink: #ece8e1; --muted: #a39e95; --faint: #6b665f;
+      --line: #2a2825; --accent: #8b85ff; --accent-soft: #1e1c3a; --accent-ink: #c7c4ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); color: var(--ink); }
+  body {
+    margin: 0; padding: 64px 24px 96px;
+    font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  .serif, h1, h2, h3 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+  h1 { font-size: 2.25rem; line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 12px; }
+  h2 { font-size: 1.35rem; margin: 56px 0 16px; letter-spacing: -0.01em; }
+  h3 { font-size: 1.2rem; margin: 0; letter-spacing: -0.01em; }
+  .meta { color: var(--muted); font-size: 0.875rem; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .tag {
+    display: inline-block; font-size: 0.75rem; padding: 1px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-ink);
+  }
+  .summary {
+    margin-top: 32px; padding: 20px 24px; border-radius: 16px;
+    background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
+  }
+  .label {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent-ink); margin: 0 0 6px;
+  }
+  .summary p:last-child { margin: 0; font-size: 1.075rem; }
+  section { display: grid; grid-template-columns: 40px 1fr; margin-top: 36px; }
+  .num { font: 12px/2.2 ui-monospace, Menlo, Consolas, monospace; color: var(--faint); }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .time {
+    font: 11px ui-monospace, Menlo, Consolas, monospace; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; text-decoration: none;
+  }
+  a.time:hover { color: var(--accent); border-color: var(--accent); }
+  ul { margin: 10px 0 0; padding: 0; list-style: none; }
+  li { position: relative; padding-left: 20px; margin: 6px 0; }
+  li::before {
+    content: ""; position: absolute; left: 2px; top: 0.72em; width: 6px; height: 6px;
+    border-radius: 50%; background: color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  details { margin-top: 56px; border-top: 1px solid var(--line); padding-top: 8px; }
+  summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+  ol.transcript { list-style: none; padding: 0; margin: 8px 0 0; }
+  ol.transcript li { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 4px 0; margin: 0; }
+  ol.transcript li::before { content: none; }
+  ol.transcript li:target { background: var(--accent-soft); border-radius: 8px; }
+  ol.transcript .t { text-align: right; font: 11px/2.4 ui-monospace, Menlo, Consolas, monospace; color: var(--faint); }
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 0.75rem; }
+  @media print {
+    html { background: #fff; }
+    body { padding: 0; }
+    details { display: block; }
+    details > summary { display: none; }
+    a.time { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>{{ title }}</h1>
+  <div class="meta">
+    {% if notes %}<span>{{ session_title }}</span>{% endif %}
+    <span>{{ started.strftime("%A, %d %B %Y · %H:%M") }}</span>
+    <span>{{ duration }}</span>
+    {% if style %}<span class="tag">{{ style }}</span>{% endif %}
+  </div>
+
+  {% if notes %}
+  <div class="summary">
+    <p class="label">Summary</p>
+    <p class="serif">{{ notes.doc.summary }}</p>
+  </div>
+
+  {% for section in notes.doc.sections %}
+  <section>
+    <span class="num">{{ "%02d" | format(loop.index) }}</span>
+    <div>
+      <div class="head">
+        <h3>{{ section.heading }}</h3>
+        {% set first = segments | selectattr("end", "ge", section.start) | first %}
+        {% if first %}
+        <a class="time" href="#t{{ first.index }}">{{ section.start | clock }} – {{ section.end | clock }}</a>
+        {% else %}
+        <span class="time">{{ section.start | clock }} – {{ section.end | clock }}</span>
+        {% endif %}
+      </div>
+      <ul>
+        {% for point in section.points %}<li>{{ point }}</li>{% endfor %}
+      </ul>
+    </div>
+  </section>
+  {% endfor %}
+  {% endif %}
+
+  {% if segments %}
+  <details{% if not notes %} open{% endif %}>
+    <summary>Full transcript</summary>
+    <ol class="transcript">
+      {% for s in segments %}
+      <li id="t{{ s.index }}"><span class="t">{{ s.start | clock }}</span><span>{{ s.text }}</span></li>
+      {% endfor %}
+    </ol>
+  </details>
+  {% endif %}
+
+  <footer>
+    Exported from Scribely on {{ exported.strftime("%d %B %Y, %H:%M") }}
+    {% if notes %} · Notes written by {{ provider }} ({{ notes.model }}){% if notes.edited %}, edited{% endif %}{% endif %}
+  </footer>
+</main>
+</body>
+</html>

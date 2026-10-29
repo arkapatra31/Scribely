@@ -33,3 +33,27 @@ REDUCE = (
     "merging duplicates caused by overlapping parts and tidying headings. Keep chronological "
     "order and keep start/end times.\n\nSections (JSON):\n{sections}"
 )
+
+RESTRUCTURE = {
+    "outline": (
+        "Rewrite these lecture notes as a study outline: group related ideas under broad topic "
+        "sections in a logical teaching order (not necessarily the order spoken), with short, "
+        "scannable points. Keep every important fact."
+    ),
+    "qa": (
+        "Rewrite these lecture notes as study questions and answers for revision: each section "
+        "heading is one clear question a student should be able to answer, and its points are "
+        "the answer in 1-4 concise bullets. Cover every important fact."
+    ),
+    "condensed": (
+        "Condense these lecture notes to the essentials for a quick review: fewer sections, "
+        "only the most important points, each as short as possible. Keep the summary to 2 "
+        "sentences."
+    ),
+}
+
+RESTRUCTURE_SUFFIX = (
+    "\n\nKeep a fitting title. Use only information in the notes; don't add facts. For each "
+    "section, keep start/end seconds that cover the original sections it draws from.\n\n"
+    "Notes (JSON):\n{notes}"
+)

@@ -12,16 +12,20 @@ from scribely.models import (
     ClientMessage,
     DeleteSessionCommand,
     ErrorMessage,
+    ExportSessionCommand,
     GetLlmSettingsCommand,
     ListSessionsCommand,
     OpenSessionCommand,
     RenameSessionCommand,
+    RestructureCommand,
+    RevealExportCommand,
     SaveLlmSettingsCommand,
     ServerMessage,
     StartCommand,
     StopCommand,
     SummarizeCommand,
     TestLlmCommand,
+    UpdateNotesCommand,
 )
 from scribely.session import LiveSessionManager, SessionError
 
@@ -90,6 +94,14 @@ async def _handle(
                 await manager.save_llm_settings(command.settings, command.api_key)
             case TestLlmCommand():
                 queue.put_nowait(await manager.test_llm())
+            case RestructureCommand():
+                await manager.restructure(command.session_id, command.style)
+            case UpdateNotesCommand():
+                await manager.update_notes(command.session_id, command.doc)
+            case ExportSessionCommand():
+                queue.put_nowait(await manager.export_session(command.session_id))
+            case RevealExportCommand():
+                await manager.reveal_export(command.path)
     except SessionError as err:
         queue.put_nowait(ErrorMessage(type="error", code=err.code, message=err.message))
 

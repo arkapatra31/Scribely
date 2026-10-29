@@ -10,9 +10,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import subprocess
+import sys
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol
 
 import structlog
@@ -21,15 +24,20 @@ from langchain_core.language_models import BaseChatModel
 from scribely.capture import AudioCapture, CaptureError, CapturePermissionError, create_capture
 from scribely.config import LLMConfig, Settings
 from scribely.credentials import Credentials
+from scribely.export import export_filename, render_session_html
 from scribely.models import (
     BackendState,
     ErrorCode,
     ErrorMessage,
+    ExportedMessage,
     LlmSettings,
     LlmSettingsMessage,
     LlmTestMessage,
+    NoteDoc,
     NotesJobMessage,
     NotesMessage,
+    NotesStyle,
+    RestructureStyle,
     ServerMessage,
     Session,
     SessionNotes,
@@ -43,12 +51,14 @@ from scribely.models import (
     TranscriptSnapshot,
 )
 from scribely.pipeline import LLMError, check_llm, generate_notes, get_llm
+from scribely.pipeline.graph import Progress
 from scribely.pipeline.llm_factory import (
     SUGGESTED_MODELS,
     explain_error,
     list_ollama_models,
     provider_name,
 )
+from scribely.pipeline.restructure import restructure_notes
 from scribely.session.store import SessionStore, StorageError
 from scribely.stt import SileroVAD, SpeechDetector, StreamingTranscriber, STTError
 from scribely.stt.transcriber import Transcriber, WhisperTranscriber
@@ -428,9 +438,61 @@ class LiveSessionManager:
                 "llm_failed",
                 "Nothing was transcribed in this session, so there's nothing to summarize.",
             )
-        self._notes_jobs[session_id] = asyncio.create_task(self._summarize(session_id, segments))
+        cfg = self._settings.llm
 
-    async def _summarize(self, session_id: str, segments: list[TranscriptSegment]) -> None:
+        async def produce(progress: Progress) -> NoteDoc:
+            await progress(f"Sending the transcript to {provider_name(cfg)} ({cfg.model})…")
+            llm = self._llm_factory(cfg, self._credentials.get(cfg.provider))
+            return await generate_notes(segments, llm, self._settings, progress)
+
+        self._start_notes_job(session_id, produce, style="standard")
+
+    async def restructure(self, session_id: str, style: RestructureStyle) -> None:
+        """Rewrite a session's current notes (including hand edits) in another style."""
+        self._check_can_write_notes(session_id)
+        notes = await self._get_notes(session_id)
+        if notes is None:
+            raise SessionError("not_found", "Summarize this session first, then restructure it.")
+        cfg = self._settings.llm
+
+        async def produce(progress: Progress) -> NoteDoc:
+            await progress(f"Restructuring with {provider_name(cfg)} ({cfg.model})…")
+            llm = self._llm_factory(cfg, self._credentials.get(cfg.provider))
+            return await restructure_notes(notes.doc, style, llm, self._settings)
+
+        self._start_notes_job(session_id, produce, style=style)
+
+    def _check_can_write_notes(self, session_id: str) -> None:
+        if self._session is not None and self._session.id == session_id and self._state != "idle":
+            raise SessionError(
+                "session_busy",
+                "Stop the recording first; notes are made from the finished transcript.",
+            )
+        if session_id in self._notes_jobs:
+            raise SessionError("session_busy", "Notes for this session are already being written.")
+
+    async def _get_notes(self, session_id: str) -> SessionNotes | None:
+        try:
+            return await self._store.get_notes(session_id)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+
+    def _start_notes_job(
+        self,
+        session_id: str,
+        produce: Callable[[Progress], Awaitable[NoteDoc]],
+        style: NotesStyle,
+    ) -> None:
+        self._notes_jobs[session_id] = asyncio.create_task(
+            self._notes_job(session_id, produce, style)
+        )
+
+    async def _notes_job(
+        self,
+        session_id: str,
+        produce: Callable[[Progress], Awaitable[NoteDoc]],
+        style: NotesStyle,
+    ) -> None:
         cfg = self._settings.llm
 
         async def progress(message: str) -> None:
@@ -444,15 +506,14 @@ class LiveSessionManager:
             await self.check_llm_setup()
             if self._llm_issue is not None:
                 raise LLMError(self._llm_issue)
-            await progress(f"Sending the transcript to {provider_name(cfg)} ({cfg.model})…")
-            llm = self._llm_factory(cfg, self._credentials.get(cfg.provider))
-            doc = await generate_notes(segments, llm, self._settings, progress)
+            doc = await produce(progress)
             notes = SessionNotes(
                 session_id=session_id,
                 doc=doc,
                 provider=cfg.provider,
                 model=cfg.model,
                 created_at=datetime.now(UTC),
+                style=style,
             )
             await self._store.save_notes(notes)
         except (LLMError, StorageError) as err:
@@ -463,7 +524,7 @@ class LiveSessionManager:
                 session_id, f"Couldn't write notes because of an unexpected error: {err}"
             )
         else:
-            log.info("notes.done", session_id=session_id, sections=len(doc.sections))
+            log.info("notes.done", session_id=session_id, style=style, sections=len(doc.sections))
             self._broadcast(
                 NotesJobMessage(
                     type="notes_job", session_id=session_id, state="done", message="Notes ready."
@@ -473,6 +534,76 @@ class LiveSessionManager:
             await self._broadcast_sessions()
         finally:
             self._notes_jobs.pop(session_id, None)
+
+    async def update_notes(self, session_id: str, doc: NoteDoc) -> SessionNotes:
+        """Save notes edited by hand."""
+        if session_id in self._notes_jobs:
+            raise SessionError("session_busy", "Wait until the notes finish generating.")
+        notes = await self._get_notes(session_id)
+        if notes is None:
+            raise SessionError("not_found", "This session has no notes to edit.")
+        edited = notes.model_copy(update={"doc": doc, "edited": True})
+        try:
+            await self._store.save_notes(edited)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        self._broadcast(NotesMessage(type="notes", notes=edited))
+        return edited
+
+    # --- export -------------------------------------------------------------------------------
+
+    async def export_session(self, session_id: str) -> ExportedMessage:
+        """Write notes (if any) and the full transcript as one standalone HTML file."""
+        try:
+            found = await self._store.get_session(session_id)
+            notes = await self._store.get_notes(session_id) if found else None
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        if found is None:
+            raise SessionError("not_found", "That session no longer exists.")
+        session, segments = found
+        if self._session is not None and self._session.id == session_id and self._state != "idle":
+            segments = self._segments  # still recording: memory is ahead of the last flush
+        if not segments and notes is None:
+            raise SessionError(
+                "export_failed", "This session is empty, so there's nothing to export."
+            )
+
+        directory = self._settings.paths.resolved_exports_dir()
+
+        def write() -> Path:
+            directory.mkdir(parents=True, exist_ok=True)
+            path = export_filename(session, notes, directory)
+            path.write_text(render_session_html(session, segments, notes), encoding="utf-8")
+            return path
+
+        try:
+            path = await asyncio.to_thread(write)
+        except OSError as err:
+            raise SessionError(
+                "export_failed", f"Couldn't write the export to {directory}: {err.strerror or err}."
+            ) from None
+        log.info("export.done", session_id=session_id, path=str(path))
+        return ExportedMessage(
+            type="exported", session_id=session_id, path=str(path), filename=path.name
+        )
+
+    async def reveal_export(self, path: str) -> None:
+        """Show an exported file in Finder / Explorer. Only files in the exports folder."""
+        exports = self._settings.paths.resolved_exports_dir().resolve()
+        target = Path(path).resolve()
+        if not target.is_relative_to(exports) or not target.is_file():
+            raise SessionError("export_failed", "That export no longer exists.")
+        if sys.platform == "darwin":
+            command = ["open", "-R", str(target)]
+        elif sys.platform == "win32":
+            command = ["explorer", f"/select,{target}"]
+        else:
+            command = ["xdg-open", str(target.parent)]
+        try:
+            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as err:
+            raise SessionError("export_failed", f"Couldn't open the folder: {err}.") from None
 
     def _notes_failed(self, session_id: str, message: str) -> None:
         log.warning("notes.failed", session_id=session_id, error=message)
