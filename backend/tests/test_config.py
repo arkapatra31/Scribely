@@ -76,6 +76,8 @@ def test_lookup_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert find_config_file() is None
     user = write(tmp_path / "user-config" / "config.toml", "")
     assert find_config_file() == user
+    project = write(tmp_path / "project" / "config.toml", "")
+    assert find_config_file() == project
     cwd = write(tmp_path / "config.toml", "")
     assert find_config_file() == cwd
     explicit = write(tmp_path / "explicit.toml", "")
@@ -96,3 +98,30 @@ def test_paths_resolve(tmp_path: Path) -> None:
     paths = load_settings(path).paths
     assert paths.resolved_data_dir() == tmp_path / "data"
     assert paths.resolved_exports_dir() == tmp_path / "data" / "exports"
+
+
+def test_data_lives_in_the_project_when_running_from_source(tmp_path: Path) -> None:
+    paths = Settings().paths
+    assert paths.resolved_data_dir() == tmp_path / "project" / "data"
+    assert paths.resolved_models_dir() == tmp_path / "project" / "data" / "models"
+    assert paths.resolved_exports_dir() == tmp_path / "project" / "data" / "exports"
+
+
+def test_relative_paths_are_relative_to_the_project(tmp_path: Path) -> None:
+    path = write(tmp_path / "c.toml", '[paths]\ndata_dir = "my-data"\n')
+    assert load_settings(path).paths.resolved_data_dir() == tmp_path / "project" / "my-data"
+
+
+def test_packaged_builds_use_the_per_user_folder(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("scribely.config.project_root", lambda: None)
+    monkeypatch.setattr(
+        "scribely.config.user_data_path", lambda *a, **k: Path("/users/me/Scribely")
+    )
+    assert Settings().paths.resolved_data_dir() == Path("/users/me/Scribely")
+
+
+def test_real_project_root_is_this_checkout(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scribely import config
+
+    monkeypatch.undo()  # drop the conftest stand-in
+    assert config.project_root() == REPO_ROOT

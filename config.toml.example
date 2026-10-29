@@ -1,9 +1,10 @@
 # Scribely configuration.
 #
-# Copy to config.toml and edit. Lookup order:
+# Copy to config.toml (at the project root) and edit. Lookup order:
 #   1. $SCRIBELY_CONFIG
 #   2. ./config.toml (current working directory)
-#   3. per-user config dir (macOS: ~/Library/Application Support/Scribely/config.toml,
+#   3. <project root>/config.toml (when running from source)
+#   4. per-user config dir (macOS: ~/Library/Application Support/Scribely/config.toml,
 #      Windows: %LOCALAPPDATA%\Scribely\config.toml)
 # Any value can be overridden with an env var: SCRIBELY_<SECTION>__<KEY>, e.g. SCRIBELY_LLM__MODEL.
 #
@@ -60,9 +61,12 @@ chunk_overlap_tokens = 200
 max_concurrency = 4         # transcript chunks summarized in parallel
 
 [paths]
-# data_dir = "~/Scribely"         # default: per-user data dir via platformdirs
-# exports_dir = "~/Scribely/exports"
-# models_dir = "~/Scribely/models"  # speech models; downloaded here on first use
+# Default when running from source: <project root>/data (database, models/, exports/).
+# Packaged builds default to the per-user data dir. Relative paths are relative to the
+# project root.
+# data_dir = "data"
+# exports_dir = "data/exports"
+# models_dir = "data/models"       # speech models; downloaded here on first use
 
 [logging]
 level = "INFO"       # DEBUG | INFO | WARNING | ERROR
