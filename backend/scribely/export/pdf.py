@@ -30,7 +30,11 @@ def render_session_pdf(
 
 def _install_hint(err: OSError) -> str:
     if sys.platform == "darwin":
-        fix = "Install it with `brew install pango`, then restart Scribely."
+        fix = (
+            "Install it with `brew install pango`, then restart Scribely. If you run the "
+            "backend from a terminal on an Apple Silicon Mac, first run "
+            "`export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`."
+        )
     elif sys.platform == "win32":
         fix = (
             "Install the GTK3 runtime (see the WeasyPrint docs: “Installation → Windows”), "

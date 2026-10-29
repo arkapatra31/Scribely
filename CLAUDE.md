@@ -73,7 +73,8 @@ Scribely/                 # repo root
 - **TypeScript:** strict mode on. Tailwind for styling; Framer Motion for transitions. Keep WS message handling in one typed client module.
 - **Notes pipeline:** the LLM call uses `llm_factory.get_llm(cfg)` which returns the appropriate `Chat*` instance (e.g. `AzureChatOpenAI`, `ChatAnthropic`, `ChatOpenAI`, `ChatGoogleGenerativeAI`, `ChatOllama`) based on `config.toml`. All nodes call `.with_structured_output(<PydanticModel>)` — this API is identical across providers. Each LangGraph node is pure and re-runnable; persist a checkpoint (SQLite) so `summarize` / `restructure` can re-run without redoing `structure`.
 - **Project-local data:** when running from a source checkout, everything lives inside the repo: `config.toml` at the root and `data/` (database, Whisper models, exports). Packaged builds use the per-user folders from `platformdirs`. Relative `[paths]` values resolve against the project root.
-- **Config:** read host, model, chunk size, temperature, and paths from `config.toml` (precedence: defaults < `config.toml` < `SCRIBELY_<SECTION>__<KEY>` env vars). The notes LLM (provider, model, Azure endpoint/deployment, Ollama host) can also be set in the app's Settings panel, which is saved in SQLite and overrides `config.toml`. Never hardcode. Changing the model must require no code change.
+- **Config:** read host, model, chunk size, temperature, and paths from `config.toml` (precedence: defaults < `config.toml` < `SCRIBELY_<SECTION>__<KEY>` env vars). The notes LLM (provider, model, Azure endpoint/deployment, Ollama host) and the speech model + language can also be set in the app (Settings, first-run setup), which is saved in SQLite and overrides `config.toml`. Never hardcode. Changing the model must require no code change.
+- **Logs stay local.** structlog writes to the console and a rotating `data/logs/scribely.log`. Never log API keys or transcript/notes text; the diagnostics report (Settings → Help) follows the same rule.
 - **API keys are never stored.** Not in config, the database, the OS keychain, or logs. The user enters the key in Settings each time Scribely starts; it lives only in the backend's memory (`scribely/credentials.py`). The provider's standard env var (e.g. `AZURE_OPENAI_API_KEY`) is accepted as a fallback. Never send a key back to the UI.
 - **Errors are actionable.** Surface plain-language problems ("model `gemma4:12b` not found — run `ollama pull gemma4:12b`"), not stack traces, to the UI.
 
@@ -100,6 +101,8 @@ pnpm gen:schemas                          # regenerate shared/schemas/models.ts 
 pnpm typecheck                            # gen:schemas + tsc across workspace
 pnpm dev                                  # pnpm tauri dev; the app starts the backend itself (reuses one already on :8765)
 pnpm build                                # pnpm tauri build (installers)
+# PDF export needs Pango: brew install pango (macOS). CI (.github/workflows/ci.yml) runs the
+# backend checks on macOS/Windows/Linux, the frontend build, and cargo fmt/clippy/test.
 ```
 
 ## Gotchas to respect

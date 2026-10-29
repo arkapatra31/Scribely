@@ -15,14 +15,16 @@ pub fn run() {
         .plugin(shell::shortcut_plugin())
         .setup(|app| {
             app.manage(Backend(Mutex::new(backend::start())));
-            shell::setup(app)?;
+            shell::setup(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![shell::set_tray_state])
         .on_window_event(|window, event| {
             // Closing the window keeps Scribely in the tray, so a recording (and the shortcut)
-            // keeps working. Quit from the tray menu or with ⌘Q.
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            // keeps working. Quit from the tray menu or with ⌘Q. Without a tray, close quits.
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && window.state::<shell::TrayState>().is_shown()
+            {
                 api.prevent_close();
                 let _ = window.hide();
             }

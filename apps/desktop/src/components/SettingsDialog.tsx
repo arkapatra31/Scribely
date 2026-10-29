@@ -372,6 +372,9 @@ function HelpTab(props: {
   }, [copy, diagnostics]);
   useEffect(() => {
     if (copy === "failed") fallback.current?.select();
+    if (copy !== "copied") return;
+    const id = setTimeout(() => setCopy("idle"), 2500);
+    return () => clearTimeout(id);
   }, [copy]);
 
   return (

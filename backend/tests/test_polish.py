@@ -328,6 +328,11 @@ def test_store_search_titles_notes_transcripts(tmp_path: Path) -> None:
 
 
 def test_export_pdf(tmp_path: Path) -> None:
+    try:
+        import weasyprint  # noqa: F401
+    except OSError:  # Pango isn't installed (e.g. a Windows CI runner)
+        pytest.skip("WeasyPrint's native libraries aren't installed")
+
     async def run() -> Path:
         m = manager(tmp_path)
         session = await m.start("Bio")

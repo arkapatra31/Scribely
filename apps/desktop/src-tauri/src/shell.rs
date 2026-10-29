@@ -19,6 +19,15 @@ pub struct Tray {
     pause: MenuItem<Wry>,
 }
 
+/// None when there is no tray icon (Linux, or the system refused one).
+pub struct TrayState(Option<Tray>);
+
+impl TrayState {
+    pub fn is_shown(&self) -> bool {
+        self.0.is_some()
+    }
+}
+
 pub fn shortcut_plugin() -> tauri::plugin::TauriPlugin<Wry> {
     tauri_plugin_global_shortcut::Builder::new()
         .with_handler(|app, _shortcut, event| {
@@ -29,12 +38,24 @@ pub fn shortcut_plugin() -> tauri::plugin::TauriPlugin<Wry> {
         .build()
 }
 
-pub fn setup(app: &mut App) -> tauri::Result<()> {
+pub fn setup(app: &mut App) {
     // Another app may own the shortcut already; Scribely works without it.
     if let Err(err) = app.global_shortcut().register(SHORTCUT) {
         eprintln!("[scribely] couldn't register the {SHORTCUT} shortcut: {err}");
     }
+    // Scribely targets macOS and Windows. On Linux (dev/CI only) the tray library aborts the
+    // app when libappindicator is missing, so it's skipped there.
+    let tray = if cfg!(target_os = "linux") {
+        None
+    } else {
+        build_tray(app)
+            .inspect_err(|err| eprintln!("[scribely] no tray icon: {err}"))
+            .ok()
+    };
+    app.manage(TrayState(tray));
+}
 
+fn build_tray(app: &mut App) -> tauri::Result<Tray> {
     let record = MenuItem::with_id(app, "record", "Start recording", false, Some(SHORTCUT))?;
     let pause = MenuItem::with_id(app, "pause", "Pause", false, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", "Show Scribely", true, None::<&str>)?;
@@ -69,18 +90,33 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         builder = builder.icon(icon.clone());
     }
     let icon = builder.build(app)?;
-    app.manage(Tray { icon, record, pause });
-    Ok(())
+    Ok(Tray {
+        icon,
+        record,
+        pause,
+    })
 }
 
 /// Called by the UI whenever the recorder changes: "idle", "recording", "paused" or "busy".
 #[tauri::command]
-pub fn set_tray_state(state: &str, tray: tauri::State<'_, Tray>) -> Result<(), String> {
-    let (record, record_on, pause, pause_on, tooltip, title) = match state {
-        "recording" => ("Stop recording", true, "Pause", true, "Scribely — recording", "●"),
-        "paused" => ("Stop recording", true, "Resume", true, "Scribely — paused", "❚❚"),
-        "idle" => ("Start recording", true, "Pause", false, "Scribely", ""),
-        _ => ("Start recording", false, "Pause", false, "Scribely", ""),
+pub fn set_tray_state(state: &str, tray: tauri::State<'_, TrayState>) -> Result<(), String> {
+    let Some(tray) = &tray.0 else {
+        return Ok(());
+    };
+    let (record, record_on) = match state {
+        "recording" | "paused" => ("Stop recording", true),
+        "idle" => ("Start recording", true),
+        _ => ("Start recording", false),
+    };
+    let (pause, pause_on) = match state {
+        "recording" => ("Pause", true),
+        "paused" => ("Resume", true),
+        _ => ("Pause", false),
+    };
+    let (tooltip, title) = match state {
+        "recording" => ("Scribely — recording", Some("●")),
+        "paused" => ("Scribely — paused", Some("❚❚")),
+        _ => ("Scribely", None),
     };
     let apply = || -> tauri::Result<()> {
         tray.record.set_text(record)?;
@@ -89,7 +125,7 @@ pub fn set_tray_state(state: &str, tray: tauri::State<'_, Tray>) -> Result<(), S
         tray.pause.set_enabled(pause_on)?;
         tray.icon.set_tooltip(Some(tooltip))?;
         // Text next to the icon in the macOS menu bar (ignored elsewhere).
-        tray.icon.set_title(if title.is_empty() { None } else { Some(title) })?;
+        tray.icon.set_title(title)?;
         Ok(())
     };
     apply().map_err(|err| err.to_string())

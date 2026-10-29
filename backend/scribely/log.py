@@ -6,6 +6,7 @@ Settings reads. Never log API keys or transcript text.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import logging.handlers
 import sys
@@ -36,7 +37,7 @@ def configure_logging(cfg: LoggingConfig, logs_dir: Path | None = None) -> Path 
     console: structlog.typing.Processor = (
         structlog.processors.JSONRenderer()
         if cfg.format == "json"
-        else structlog.dev.ConsoleRenderer(colors=sys.stderr.isatty())
+        else structlog.dev.ConsoleRenderer(colors=_console_colors())
     )
     handlers: list[logging.Handler] = [_handler(logging.StreamHandler(), console, shared)]
 
@@ -88,6 +89,12 @@ def tail(lines: int = 150) -> list[str]:
             return [line.rstrip("\n") for line in deque(f, maxlen=lines)]
     except OSError:
         return []
+
+
+def _console_colors() -> bool:
+    # structlog needs colorama for colors on Windows (and raises without it).
+    has_colorama = importlib.util.find_spec("colorama") is not None
+    return sys.stderr.isatty() and (sys.platform != "win32" or has_colorama)
 
 
 def _handler(
