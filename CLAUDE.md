@@ -58,6 +58,7 @@ Scribely/                 # repo root
     tests/
   shared/
     schemas/              # TypeScript types generated from Pydantic
+  site/                   # GitHub Pages website (static HTML/CSS/JS, deployed by .github/workflows/pages.yml)
   data/                   # local app data from source runs: scribely.db, models/, exports/ (gitignored)
   config.toml.example     # documented defaults; copy to config.toml at the root (gitignored)
   package.json            # pnpm workspace root (gen:schemas, dev, build)

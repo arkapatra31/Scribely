@@ -1,5 +1,7 @@
 # Scribely
 
+**[Website](https://arkapatra31.github.io/Scribely/)** · [Setup on macOS](SetupMacOS.md) · [Setup on Windows](SetupWindows.md)
+
 Listen, learn, and let Scribely take the notes: live, on-device transcription plus LLM-structured study notes.
 
 Scribely is a local-first desktop app for **macOS and Windows**. Play a lecture in any browser or video player; Scribely listens to your computer's audio, writes the transcript as it plays, and when you're done turns it into clean study notes you can restructure, edit and export.
@@ -131,7 +133,22 @@ pnpm typecheck                                        # from the repo root
 cd apps/desktop/src-tauri && cargo clippy --all-targets -- -D warnings && cargo test
 ```
 
-CI runs all of these on macOS, Windows and Linux for every pull request. Configuration lives in `config.toml` (copy `config.toml.example`); settings chosen in the app override it. When running from source, all app data stays in `data/` inside the repo. See `CLAUDE.md` for the project's rules and conventions.
+CI runs all of these on macOS, Windows and Linux for every pull request. See `CLAUDE.md` for the project's rules and conventions.
+
+The website in `site/` is plain HTML, CSS and JavaScript (no build step). Preview it with `python3 -m http.server -d site 8000`; pushes to `main` that touch `site/` deploy it to GitHub Pages (`.github/workflows/pages.yml`).
+
+## Configuration and data
+
+Scribely needs no configuration file: the speech model, language and notes model are chosen in the app. For advanced settings, copy `config.toml.example` to `config.toml` in the repo root. It's gitignored, so your paths stay private. `backend/scribely/config.py` is the code that reads it.
+
+When running from source, everything stays in `data/` inside the repo: `scribely.db` (sessions, transcripts, notes), `models/` (speech models), `exports/` and `logs/`. To put any of it elsewhere, set `data_dir`, or `models_dir` / `exports_dir` / `logs_dir`, under `[paths]`:
+
+```toml
+[paths]
+models_dir = "/Volumes/External/ScribelyModels"
+```
+
+Precedence: built-in defaults < `config.toml` < `SCRIBELY_<SECTION>__<KEY>` environment variables; choices made in the app override all three for the models and language. API keys never go in the file.
 
 ## License
 
