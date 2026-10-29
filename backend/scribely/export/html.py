@@ -52,10 +52,13 @@ def session_title(session: Session) -> str:
 
 
 def render_session_html(
-    session: Session, segments: list[TranscriptSegment], notes: SessionNotes | None
+    session: Session,
+    segments: list[TranscriptSegment],
+    notes: SessionNotes | None,
+    template: str = "session.html.j2",
 ) -> str:
     duration = segments[-1].end if segments else 0.0
-    return _env.get_template("session.html.j2").render(
+    return _env.get_template(template).render(
         session=session,
         title=notes.doc.title if notes else session_title(session),
         session_title=session_title(session),
@@ -70,15 +73,17 @@ def render_session_html(
     )
 
 
-def export_filename(session: Session, notes: SessionNotes | None, directory: Path) -> Path:
-    """``<date> <title>.html`` in ``directory``, never overwriting an existing file."""
+def export_filename(
+    session: Session, notes: SessionNotes | None, directory: Path, suffix: str = ".html"
+) -> Path:
+    """``<date> <title><suffix>`` in ``directory``, never overwriting an existing file."""
     title = notes.doc.title if notes else session_title(session)
     slug = _slug(title) or "session"
     stem = f"{session.started_at.astimezone():%Y-%m-%d} {slug}"
-    path = directory / f"{stem}.html"
+    path = directory / f"{stem}{suffix}"
     n = 2
     while path.exists():
-        path = directory / f"{stem} ({n}).html"
+        path = directory / f"{stem} ({n}){suffix}"
         n += 1
     return path
 

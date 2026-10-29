@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Download,
+  FileText,
+  Globe,
   ListTree,
   LoaderCircle,
   MessagesSquare,
@@ -9,12 +11,25 @@ import {
   Sparkles,
   WandSparkles,
 } from "lucide-react";
-import type { NotesJobMessage, RestructureCommand } from "@scribely/schemas";
+import type { ExportSessionCommand, NotesJobMessage, RestructureCommand } from "@scribely/schemas";
 
 export type Tab = "transcript" | "notes";
 type Style = RestructureCommand["style"];
+export type ExportFormat = NonNullable<ExportSessionCommand["format"]>;
 
-const STYLES: { value: Style; label: string; hint: string; icon: typeof ListTree }[] = [
+interface MenuItem<T> {
+  value: T;
+  label: string;
+  hint: string;
+  icon: typeof ListTree;
+}
+
+const FORMATS: MenuItem<ExportFormat>[] = [
+  { value: "pdf", label: "PDF document", hint: "To print or share", icon: FileText },
+  { value: "html", label: "Web page", hint: "Opens in any browser", icon: Globe },
+];
+
+const STYLES: MenuItem<Style>[] = [
   { value: "outline", label: "Study outline", hint: "Grouped by topic", icon: ListTree },
   { value: "qa", label: "Questions & answers", hint: "For revision", icon: MessagesSquare },
   { value: "condensed", label: "Condensed", hint: "Just the essentials", icon: Minimize2 },
@@ -30,11 +45,11 @@ interface Props {
   onTab: (tab: Tab) => void;
   onSummarize: () => void;
   onRestructure: (style: Style) => void;
-  onExport: () => void;
+  onExport: (format: ExportFormat) => void;
   onOpenSettings: () => void;
 }
 
-/** Underline tabs plus the session's actions: Export, Restructure, Summarize. */
+/** Underline tabs plus the session's actions: Export (PDF/HTML), Restructure, Summarize. */
 export function Toolbar(props: Props) {
   const { tab, hasNotes, canSummarize, canExport, job, llmIssue } = props;
   const running = job?.state === "running";
@@ -69,18 +84,16 @@ export function Toolbar(props: Props) {
             </button>
           ) : null}
           {canExport && (
-            <button
-              type="button"
-              onClick={props.onExport}
-              title="Export as HTML"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm text-ink-muted transition hover:border-line-strong hover:text-ink"
-            >
-              <Download className="h-4 w-4" aria-hidden />
-              Export
-            </button>
+            <Menu label="Export" icon={Download} items={FORMATS} onPick={props.onExport} />
           )}
           {canSummarize && hasNotes && (
-            <RestructureMenu disabled={running} onPick={props.onRestructure} />
+            <Menu
+              label="Restructure"
+              icon={WandSparkles}
+              items={STYLES}
+              disabled={running}
+              onPick={props.onRestructure}
+            />
           )}
           {canSummarize && (
             <button
@@ -103,7 +116,14 @@ export function Toolbar(props: Props) {
   );
 }
 
-function RestructureMenu({ disabled, onPick }: { disabled: boolean; onPick: (s: Style) => void }) {
+function Menu<T extends string>(props: {
+  label: string;
+  icon: typeof ListTree;
+  items: MenuItem<T>[];
+  disabled?: boolean;
+  onPick: (value: T) => void;
+}) {
+  const { label, icon: ButtonIcon, items, disabled = false, onPick } = props;
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -131,30 +151,30 @@ function RestructureMenu({ disabled, onPick }: { disabled: boolean; onPick: (s: 
         aria-expanded={open}
         className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm text-ink-muted transition hover:border-line-strong hover:text-ink disabled:opacity-50"
       >
-        <WandSparkles className="h-4 w-4" aria-hidden />
-        Restructure
+        <ButtonIcon className="h-4 w-4" aria-hidden />
+        {label}
         <ChevronDown className="h-3.5 w-3.5" aria-hidden />
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-20 mt-2 w-60 rounded-2xl border border-line bg-paper-raised p-1.5 shadow-float"
+          className="absolute right-0 top-full z-20 mt-2 w-56 rounded-2xl border border-line bg-paper-raised p-1.5 shadow-float"
         >
-          {STYLES.map(({ value, label, hint, icon: Icon }) => (
+          {items.map((item) => (
             <button
-              key={value}
+              key={item.value}
               type="button"
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                onPick(value);
+                onPick(item.value);
               }}
               className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-paper-sunken"
             >
-              <Icon className="mt-0.5 h-4 w-4 text-accent" aria-hidden />
+              <item.icon className="mt-0.5 h-4 w-4 text-accent" aria-hidden />
               <span>
-                <span className="block text-sm font-medium">{label}</span>
-                <span className="block text-xs text-ink-muted">{hint}</span>
+                <span className="block text-sm font-medium">{item.label}</span>
+                <span className="block text-xs text-ink-muted">{item.hint}</span>
               </span>
             </button>
           ))}

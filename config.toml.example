@@ -34,6 +34,7 @@ model = "small"             # tiny | base | small | medium | large-v3 | distil-l
 device = "auto"             # auto | cpu | cuda
 compute_type = "default"    # e.g. int8 (fast on CPU), float16 (GPU); default lets CTranslate2 choose
 # language = "en"           # set it for best results; unset auto-detects per segment
+#                           # (Settings → Speech in the app overrides model and language)
 beam_size = 5
 vad_threshold = 0.5
 min_silence_ms = 600        # pause that ends a transcript segment
@@ -67,7 +68,9 @@ max_concurrency = 4         # transcript chunks summarized in parallel
 # data_dir = "data"
 # exports_dir = "data/exports"
 # models_dir = "data/models"       # speech models; downloaded here on first use
+# logs_dir = "data/logs"           # scribely.log (see [logging] file)
 
 [logging]
 level = "INFO"       # DEBUG | INFO | WARNING | ERROR
 format = "console"   # console | json
+file = true          # also write logs_dir/scribely.log (rotated; stays on this computer)

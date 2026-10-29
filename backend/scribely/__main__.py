@@ -22,7 +22,10 @@ def main() -> None:
         print(err, file=sys.stderr)
         raise SystemExit(2) from None
 
-    configure_logging(settings.logging)
+    configure_logging(
+        settings.logging,
+        settings.paths.resolved_logs_dir() if settings.logging.file else None,
+    )
     db_path = settings.paths.resolved_data_dir() / "scribely.db"
     try:
         store = SessionStore.open(db_path)

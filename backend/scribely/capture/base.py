@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 
+import numpy as np
 import structlog
 
 from scribely.capture.dsp import TARGET_SAMPLE_RATE, Float32Array, Resampler, to_mono
@@ -38,6 +40,8 @@ class AudioChunk:
     """Mono float32 samples in [-1, 1] at ``TARGET_SAMPLE_RATE``."""
     start: float
     """Offset in seconds from capture start."""
+    boundary: bool = field(default=False, kw_only=True)
+    """An empty marker: the audio before it is complete (e.g. the recording was paused)."""
 
     @property
     def duration(self) -> float:
@@ -49,6 +53,7 @@ class AudioChunk:
 
 
 _Item = AudioChunk | BaseException | None
+_EMPTY: Float32Array = np.zeros(0, dtype=np.float32)
 
 
 class AudioCapture(ABC):
@@ -73,6 +78,10 @@ class AudioCapture(ABC):
         self._opened = False
         self._active = False
         self._finished = False
+        # Pause state is shared with the native thread.
+        self._pause_lock = threading.Lock()
+        self._paused_at: float | None = None
+        self._pending_shift = 0.0
 
     @abstractmethod
     async def _open(self) -> None:
@@ -86,6 +95,30 @@ class AudioCapture(ABC):
     def running(self) -> bool:
         return self._opened
 
+    @property
+    def paused(self) -> bool:
+        return self._paused_at is not None
+
+    def pause(self) -> None:
+        """Drop incoming audio until ``resume()``; offsets skip the paused time, so the
+        transcript's timestamps keep matching a video that was paused too."""
+        with self._pause_lock:
+            if self._paused_at is not None or not self._opened:
+                return
+            self._paused_at = self._clock()
+        # Lets the consumer finish the speech captured so far. call_soon runs after chunks the
+        # native thread already posted, so the marker lands after them.
+        marker = AudioChunk(samples=_EMPTY, start=self._next_start, boundary=True)
+        if self._loop is not None:
+            self._loop.call_soon(self._enqueue, marker)
+
+    def resume(self) -> None:
+        with self._pause_lock:
+            if self._paused_at is None:
+                return
+            self._pending_shift += self._clock() - self._paused_at
+            self._paused_at = None
+
     async def start(self) -> None:
         if self._opened:
             raise CaptureError("Audio capture is already running.")
@@ -97,6 +130,8 @@ class AudioCapture(ABC):
         self._started_at = None
         self._next_start = 0.0
         self._finished = False
+        self._paused_at = None
+        self._pending_shift = 0.0
         self._active = True
         try:
             await self._open()
@@ -153,6 +188,12 @@ class AudioCapture(ABC):
         n_in = len(frames)
         if not self._active or n_in == 0:
             return
+        with self._pause_lock:
+            if self._paused_at is not None:
+                return
+            shift, self._pending_shift = self._pending_shift, 0.0
+        if shift and self._started_at is not None:
+            self._started_at += shift
         now = self._clock()
         if self._resampler is None or self._resampler.in_rate != sample_rate:
             self._resampler = Resampler(sample_rate)

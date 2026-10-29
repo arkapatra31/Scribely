@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import sqlite3
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +22,7 @@ import structlog
 
 from scribely.models import (
     NoteDoc,
+    SearchHit,
     Session,
     SessionNotes,
     SessionStatus,
@@ -29,6 +31,8 @@ from scribely.models import (
 )
 
 T = TypeVar("T")
+SNIPPET_BEFORE, SNIPPET_AFTER = 40, 90
+SEARCH_LIMIT = 100
 log = structlog.get_logger(__name__)
 
 # Each entry upgrades the schema by one version (PRAGMA user_version). Never edit a released
@@ -157,6 +161,11 @@ class SessionStore:
 
     async def list_sessions(self) -> list[SessionSummary]:
         return await self._run(self._list_blocking)
+
+    async def search(self, query: str) -> list[SearchHit]:
+        """Sessions whose title, notes or transcript contain ``query`` (case-insensitive),
+        newest first, one hit per session (title before notes before transcript)."""
+        return await self._run(self._search_blocking, query.strip())
 
     async def get_session(self, session_id: str) -> tuple[Session, list[TranscriptSegment]] | None:
         return await self._run(self._get_blocking, session_id)
@@ -322,6 +331,47 @@ class SessionStore:
         ]
         return _row_to_session(row), segments
 
+    def _search_blocking(self, query: str) -> list[SearchHit]:
+        if not query:
+            return []
+        pattern = "%" + re.sub(r"([\\%_])", r"\\\1", query) + "%"
+        hits: dict[str, SearchHit] = {}
+        for r in self._db.execute(
+            "SELECT id, title FROM sessions WHERE title LIKE ? ESCAPE '\\'", (pattern,)
+        ):
+            hits[r["id"]] = SearchHit(session_id=r["id"], field="title", snippet=r["title"])
+        needle = query.casefold()
+        for r in self._db.execute("SELECT session_id, doc FROM notes"):
+            if r["session_id"] in hits:
+                continue
+            doc = NoteDoc.model_validate_json(r["doc"])
+            texts = [doc.title, doc.summary]
+            for section in doc.sections:
+                texts += [section.heading, *section.points]
+            for text in texts:
+                if needle in text.casefold():
+                    hits[r["session_id"]] = SearchHit(
+                        session_id=r["session_id"], field="notes", snippet=_snippet(text, query)
+                    )
+                    break
+        # SQLite returns the other columns from the row holding MIN(idx): the first match.
+        for r in self._db.execute(
+            "SELECT session_id, MIN(idx) AS idx, start, text FROM segments "
+            "WHERE text LIKE ? ESCAPE '\\' GROUP BY session_id",
+            (pattern,),
+        ):
+            if r["session_id"] not in hits:
+                hits[r["session_id"]] = SearchHit(
+                    session_id=r["session_id"],
+                    field="transcript",
+                    snippet=_snippet(r["text"], query),
+                    start=r["start"],
+                )
+        order = [
+            r["id"] for r in self._db.execute("SELECT id FROM sessions ORDER BY started_at DESC")
+        ]
+        return [hits[i] for i in order if i in hits][:SEARCH_LIMIT]
+
     @contextlib.contextmanager
     def _transaction(self) -> Iterator[None]:
         self._db.execute("BEGIN")
@@ -331,6 +381,18 @@ class SessionStore:
             self._db.execute("ROLLBACK")
             raise
         self._db.execute("COMMIT")
+
+
+def _snippet(text: str, query: str) -> str:
+    """The text around the first match of ``query``, with ellipses where it was cut."""
+    at = text.casefold().find(query.casefold())
+    if at < 0:
+        return text[: SNIPPET_BEFORE + SNIPPET_AFTER]
+    start = max(0, at - SNIPPET_BEFORE)
+    end = min(len(text), at + len(query) + SNIPPET_AFTER)
+    if start > 0 and (space := text.find(" ", start, at)) != -1:
+        start = space + 1  # don't start mid-word
+    return ("…" if start > 0 else "") + text[start:end] + ("…" if end < len(text) else "")
 
 
 def _row_to_session(row: sqlite3.Row) -> Session:

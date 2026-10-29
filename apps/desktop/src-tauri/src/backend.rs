@@ -34,6 +34,8 @@ pub fn start() -> Option<Child> {
         .env("SCRIBELY_PARENT_PID", std::process::id().to_string())
         .env("SCRIBELY_SERVER__PORT", PORT.to_string())
         .stdin(Stdio::null());
+    #[cfg(target_os = "macos")]
+    command.env("DYLD_FALLBACK_LIBRARY_PATH", dyld_fallback_path());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -104,6 +106,27 @@ fn backend_command() -> Option<Command> {
         }
     }
     None
+}
+
+/// PDF export (WeasyPrint) loads Pango by name; Homebrew on Apple Silicon installs it in
+/// /opt/homebrew/lib, which isn't on the default search path. Keeps the defaults after it.
+#[cfg(target_os = "macos")]
+fn dyld_fallback_path() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let mut dirs: Vec<String> = std::env::var("DYLD_FALLBACK_LIBRARY_PATH")
+        .map(|v| v.split(':').map(str::to_owned).collect())
+        .unwrap_or_default();
+    for dir in [
+        "/opt/homebrew/lib".to_owned(),
+        format!("{home}/lib"),
+        "/usr/local/lib".to_owned(),
+        "/usr/lib".to_owned(),
+    ] {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    dirs.join(":")
 }
 
 fn port_in_use(port: u16) -> bool {

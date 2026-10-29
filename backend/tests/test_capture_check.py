@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from scribely.capture import check
 from scribely.capture.check import main
 from tests.audio import sine, write_wav
 
@@ -38,7 +39,10 @@ def test_silent_recording_exits_nonzero(tmp_path: Path, monkeypatch: pytest.Monk
 def test_capture_error_exits_2(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("scribely.capture.sys.platform", "linux")
+    # create_capture's platform default is bound at import, so pass one explicitly.
+    from scribely.capture import create_capture as real
+
+    monkeypatch.setattr(check, "create_capture", lambda cfg: real(cfg, platform="linux"))
     with pytest.raises(SystemExit) as exc:
         main(["--seconds", "1"])
     assert exc.value.code == 2

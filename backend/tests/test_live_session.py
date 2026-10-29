@@ -210,9 +210,10 @@ def test_new_subscriber_gets_last_session_snapshot(tmp_path: Path) -> None:
         await wait_idle(manager)
         return drain(manager.subscribe())
 
-    status, snapshot = asyncio.run(run())
+    status, snapshot, model = asyncio.run(run())
     assert isinstance(status, StatusMessage) and status.session is not None
     assert snapshot.type == "transcript_snapshot"
+    assert model.type == "speech_model" and model.state == "ready"
     assert [s.text for s in snapshot.segments] == ["speech 1.0s", "speech 0.5s"]
 
 

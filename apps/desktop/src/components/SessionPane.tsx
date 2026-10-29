@@ -11,7 +11,7 @@ import type {
 import { NotesEditor } from "./NotesEditor";
 import { NotesView } from "./NotesView";
 import { SessionHeader } from "./SessionHeader";
-import { type Tab, Toolbar } from "./Toolbar";
+import { type ExportFormat, type Tab, Toolbar } from "./Toolbar";
 import { Transcript } from "./Transcript";
 
 interface Props {
@@ -28,16 +28,26 @@ interface Props {
   onSummarize: () => void;
   onRestructure: (style: RestructureCommand["style"]) => void;
   onUpdateNotes: (doc: NoteDoc) => void;
-  onExport: () => void;
+  onExport: (format: ExportFormat) => void;
   onOpenSettings: () => void;
   onBackToLive?: () => void;
+  /** Open on the transcript, scrolled to this time (e.g. a search hit). */
+  initialFocus?: number | null;
 }
 
 /** One session's main pane. Keyed by session id, so tab and scroll state reset per session. */
 export function SessionPane(props: Props) {
   const { session, segments, partial, live, recording, notes, job } = props;
-  const [tab, setTab] = useState<Tab>(notes ? "notes" : "transcript");
-  const [focusTime, setFocusTime] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>(
+    notes && props.initialFocus == null ? "notes" : "transcript",
+  );
+  const [focusTime, setFocusTime] = useState<number | null>(props.initialFocus ?? null);
+  useEffect(() => {
+    if (props.initialFocus == null) return;
+    setFocusTime(props.initialFocus);
+    setEditing(false);
+    setTab("transcript");
+  }, [props.initialFocus]);
   const [editing, setEditing] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -48,7 +58,7 @@ export function SessionPane(props: Props) {
     hadNotes.current = notes !== undefined;
   }, [notes]);
 
-  const recordingThis = live && recording;
+  const recordingThis = live && recording; // recording or paused
   const duration = segments.length ? segments[segments.length - 1].end : 0;
   const showNotes = notes !== undefined && tab === "notes";
   const running = job?.state === "running";

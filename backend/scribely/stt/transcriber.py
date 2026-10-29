@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from scribely.capture.dsp import Float32Array
 from scribely.config import SttConfig
@@ -22,6 +23,11 @@ class TimedText:
     text: str
 
 
+ModelPhase = Literal["downloading", "loading"]
+# Called from the loading thread: the phase, and download progress 0..1 (None if unknown).
+LoadProgress = Callable[[ModelPhase, float | None], None]
+
+
 class Transcriber(Protocol):
     def transcribe(
         self, audio: Float32Array, *, final: bool, prompt: str | None = None
@@ -36,13 +42,30 @@ class WhisperTranscriber:
         self._models_dir = models_dir
         self._model: Any = None
 
-    def load(self) -> None:
+    def configure(self, cfg: SttConfig) -> None:
+        """Apply new settings. A different model (or device) is loaded on the next ``load()``;
+        a different language applies from the next transcription."""
+        if (cfg.model, cfg.device, cfg.compute_type) != (
+            self._cfg.model,
+            self._cfg.device,
+            self._cfg.compute_type,
+        ):
+            self._model = None
+        self._cfg = cfg
+
+    def load(self, on_progress: LoadProgress | None = None) -> None:
         """Blocking; downloads the model into ``models_dir`` on first use."""
         if self._model is not None:
             return
         from faster_whisper import WhisperModel
 
+        from scribely.stt import catalog
+
         name = self._cfg.model
+        report = on_progress or (lambda phase, fraction: None)
+        if catalog.repo_id(name) is not None and not catalog.is_downloaded(name, self._models_dir):
+            catalog.download(name, self._models_dir, lambda f: report("downloading", f))
+        report("loading", None)
         try:
             self._model = WhisperModel(
                 name,

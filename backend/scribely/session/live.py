@@ -10,26 +10,49 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
+import platform
 import subprocess
 import sys
+import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+import numpy as np
 import structlog
 from langchain_core.language_models import BaseChatModel
 
-from scribely.capture import AudioCapture, CaptureError, CapturePermissionError, create_capture
-from scribely.config import LLMConfig, Settings
+from scribely import __version__
+from scribely import log as logfile
+from scribely.capture import (
+    AudioCapture,
+    AudioChunk,
+    CaptureError,
+    CapturePermissionError,
+    create_capture,
+)
+from scribely.capture import permission as capture_permission
+from scribely.config import LLMConfig, Settings, SttConfig
 from scribely.credentials import Credentials
-from scribely.export import export_filename, render_session_html
+from scribely.export import (
+    PdfUnavailableError,
+    export_filename,
+    render_session_html,
+    render_session_pdf,
+)
 from scribely.models import (
+    AudioLevelMessage,
     BackendState,
+    CapturePermissionMessage,
+    DiagnosticsMessage,
     ErrorCode,
     ErrorMessage,
     ExportedMessage,
+    ExportFormat,
+    LanguageOption,
     LlmSettings,
     LlmSettingsMessage,
     LlmTestMessage,
@@ -38,12 +61,17 @@ from scribely.models import (
     NotesMessage,
     NotesStyle,
     RestructureStyle,
+    SearchResultsMessage,
     ServerMessage,
     Session,
     SessionNotes,
     SessionOpenedMessage,
     SessionsMessage,
     SessionStatus,
+    SpeechModelMessage,
+    SpeechModelOption,
+    SpeechSettings,
+    SpeechSettingsMessage,
     StatusMessage,
     TranscriptFinalMessage,
     TranscriptPartialMessage,
@@ -60,18 +88,24 @@ from scribely.pipeline.llm_factory import (
 )
 from scribely.pipeline.restructure import restructure_notes
 from scribely.session.store import SessionStore, StorageError
-from scribely.stt import SileroVAD, SpeechDetector, StreamingTranscriber, STTError
-from scribely.stt.transcriber import Transcriber, WhisperTranscriber
+from scribely.stt import SileroVAD, SpeechDetector, StreamingTranscriber, STTError, catalog
+from scribely.stt.transcriber import LoadProgress, ModelPhase, Transcriber, WhisperTranscriber
 
 SUBSCRIBER_QUEUE_SIZE = 1000
 LLM_SETTINGS_KEY = "llm"
+STT_SETTINGS_KEY = "stt"
+ONBOARDED_KEY = "onboarded"
 FLUSH_INTERVAL_SECONDS = 1.0
+LEVEL_INTERVAL_SECONDS = 0.1
+LEVEL_FLOOR_DB = -60.0
 
 log = structlog.get_logger(__name__)
 
 
 class LoadableTranscriber(Transcriber, Protocol):
-    def load(self) -> None: ...
+    def load(self, on_progress: LoadProgress | None = None) -> None: ...
+
+    def configure(self, cfg: SttConfig) -> None: ...
 
 
 class SessionError(Exception):
@@ -117,6 +151,11 @@ class LiveSessionManager:
         self._llm_factory = llm_factory
         self._credentials = credentials or Credentials()
         self._llm_issue: str | None = None
+        self._speech_model: SpeechModelMessage | None = None
+        self._onboarded = True
+        # Recorded time excluding pauses: seconds before the last resume + the running stretch.
+        self._recorded_before = 0.0
+        self._recording_since: float | None = None
 
     @property
     def state(self) -> BackendState:
@@ -129,6 +168,8 @@ class LiveSessionManager:
         queue: asyncio.Queue[ServerMessage] = asyncio.Queue(maxsize=SUBSCRIBER_QUEUE_SIZE)
         queue.put_nowait(self._status())
         queue.put_nowait(TranscriptSnapshot(type="transcript_snapshot", segments=self._segments))
+        if self._speech_model is not None:
+            queue.put_nowait(self._speech_model)
         self._subscribers.add(queue)
         return queue
 
@@ -149,7 +190,13 @@ class LiveSessionManager:
             session=self._session,
             model=self._settings.stt.model,
             llm_issue=self._llm_issue,
+            elapsed=self._elapsed(),
+            onboarded=self._onboarded,
         )
+
+    def _elapsed(self) -> float:
+        running = time.monotonic() - self._recording_since if self._recording_since else 0.0
+        return self._recorded_before + running
 
     def _set_state(self, state: BackendState) -> None:
         self._state = state
@@ -157,19 +204,72 @@ class LiveSessionManager:
 
     # --- model ------------------------------------------------------------------------------
 
-    def warm_up(self) -> None:
-        """Start loading the speech model in the background so the first Record is quick."""
-        if self._model_task is None:
-            self._model_task = asyncio.ensure_future(asyncio.to_thread(self._transcriber.load))
-            self._model_task.add_done_callback(self._on_model_loaded)
+    async def startup(self) -> None:
+        """Apply saved settings, then get the speech model ready unless first-run setup is
+        still to pick one."""
+        await self.load_saved_llm_settings()
+        await self.load_saved_speech_settings()
+        try:
+            onboarded = await self._store.get_setting(ONBOARDED_KEY) == "1"
+            # People who recorded before onboarding existed don't need it.
+            self._onboarded = onboarded or bool(await self._store.list_sessions())
+        except StorageError as err:
+            log.warning("settings.load_failed", error=str(err))
+        model = self._settings.stt.model
+        downloaded = await asyncio.to_thread(
+            catalog.is_downloaded, model, self._settings.paths.resolved_models_dir()
+        )
+        if self._onboarded or downloaded:
+            self.warm_up()
 
-    def _on_model_loaded(self, task: asyncio.Future[None]) -> None:
+    def warm_up(self) -> None:
+        """Start downloading/loading the speech model in the background so Record is quick."""
+        if self._model_task is None:
+            loop = asyncio.get_running_loop()
+            model = self._settings.stt.model
+
+            def progress(phase: ModelPhase, fraction: float | None) -> None:
+                loop.call_soon_threadsafe(self._model_progress, model, phase, fraction)
+
+            self._model_task = asyncio.ensure_future(
+                asyncio.to_thread(self._transcriber.load, progress)
+            )
+            self._model_task.add_done_callback(lambda t: self._on_model_loaded(t, model))
+
+    def _model_progress(self, model: str, phase: ModelPhase, fraction: float | None) -> None:
+        if model != self._settings.stt.model:
+            return
+        label = _model_label(model)
+        message = (
+            f"Downloading the {label} speech model…"
+            if phase == "downloading"
+            else f"Loading the {label} speech model…"
+        )
+        self._set_speech_model(
+            SpeechModelMessage(
+                type="speech_model", model=model, state=phase, progress=fraction, message=message
+            )
+        )
+
+    def _on_model_loaded(self, task: asyncio.Future[None], model: str) -> None:
         if task.cancelled():
             return
         if (err := task.exception()) is not None:
-            log.warning("stt.model_load_failed", error=str(err))
+            log.warning("stt.model_load_failed", model=model, error=str(err))
+            if self._model_task is task:
+                self._model_task = None  # the next warm_up() or Record retries
+            state, message = "failed", str(err)
         else:
-            log.info("stt.model_ready", model=self._settings.stt.model)
+            log.info("stt.model_ready", model=model)
+            state, message = "ready", f"The {_model_label(model)} speech model is ready."
+        if model == self._settings.stt.model:
+            self._set_speech_model(
+                SpeechModelMessage(type="speech_model", model=model, state=state, message=message)
+            )
+
+    def _set_speech_model(self, message: SpeechModelMessage) -> None:
+        self._speech_model = message
+        self._broadcast(message)
 
     async def _ensure_model(self) -> None:
         self.warm_up()
@@ -220,6 +320,7 @@ class LiveSessionManager:
 
             self._session, self._segments, self._capture = session, [], capture
             self._run_failed = self._storage_warned = False
+            self._recorded_before, self._recording_since = 0.0, time.monotonic()
             self._run_task = asyncio.create_task(self._run(capture, session))
             self._flush_task = asyncio.create_task(self._flush_loop())
             self._set_state("recording")
@@ -230,17 +331,42 @@ class LiveSessionManager:
 
     async def stop(self) -> Session:
         async with self._lock:
-            if self._state != "recording" or self._capture is None or self._run_task is None:
+            if (
+                self._state not in ("recording", "paused")
+                or self._capture is None
+                or self._run_task is None
+            ):
                 raise SessionError("not_recording", "Nothing is being recorded.")
             self._set_state("stopping")
             await self._capture.stop()
             await self._run_task  # drains the last segment; handles its own errors
             return await self._end_session("failed" if self._run_failed else "stopped")
 
+    async def pause(self) -> None:
+        """Stop listening without ending the session; the timer and timestamps pause too."""
+        async with self._lock:
+            if self._state != "recording" or self._capture is None:
+                raise SessionError("not_recording", "Nothing is being recorded.")
+            self._capture.pause()
+            self._recorded_before = self._elapsed()
+            self._recording_since = None
+            self._broadcast(AudioLevelMessage(type="audio_level", level=0.0))
+            self._set_state("paused")
+            log.info("session.paused", session_id=self._session.id if self._session else None)
+
+    async def resume(self) -> None:
+        async with self._lock:
+            if self._state != "paused" or self._capture is None:
+                raise SessionError("not_recording", "The recording isn't paused.")
+            self._capture.resume()
+            self._recording_since = time.monotonic()
+            self._set_state("recording")
+            log.info("session.resumed", session_id=self._session.id if self._session else None)
+
     async def shutdown(self) -> None:
         for job in list(self._notes_jobs.values()):
             job.cancel()
-        if self._state == "recording":
+        if self._state in ("recording", "paused"):
             await self.stop()
         elif self._run_task is not None:  # a session is finishing on its own
             await self._run_task
@@ -248,7 +374,7 @@ class LiveSessionManager:
     async def _run(self, capture: AudioCapture, session: Session) -> None:
         stream = StreamingTranscriber(self._transcriber, self._vad_factory(), self._settings.stt)
         try:
-            async for u in stream.run(capture.stream()):
+            async for u in stream.run(self._metered(capture.stream())):
                 if u.final:
                     segment = TranscriptSegment(
                         session_id=session.id,
@@ -272,7 +398,7 @@ class LiveSessionManager:
                             text=u.text,
                         )
                     )
-            if self._state == "recording":  # the source ended by itself (e.g. end of file)
+            if self._state in ("recording", "paused"):  # the source ended by itself (e.g. EOF)
                 self._set_state("stopping")  # stop() now refuses; we finish the session here
                 await capture.stop()
                 await self._end_session("stopped")
@@ -292,15 +418,29 @@ class LiveSessionManager:
                     f"Recording stopped because of an unexpected error: {err}",
                 )
             self._broadcast(ErrorMessage(type="error", code=code, message=message))
-            if self._state == "recording":  # not already being stopped by stop()
+            if self._state in ("recording", "paused"):  # not already being stopped by stop()
                 self._set_state("stopping")
                 await capture.stop()
                 await self._end_session("failed")
             else:
                 await capture.stop()
 
+    async def _metered(self, chunks: AsyncIterator[AudioChunk]) -> AsyncIterator[AudioChunk]:
+        """Pass chunks through, broadcasting the loudest level about 10 times a second."""
+        peak, last = 0.0, 0.0
+        async for chunk in chunks:
+            if len(chunk.samples):
+                rms = float(np.sqrt(np.mean(np.square(chunk.samples, dtype=np.float64))))
+                peak = max(peak, rms)
+                now = time.monotonic()
+                if now - last >= LEVEL_INTERVAL_SECONDS:
+                    self._broadcast(AudioLevelMessage(type="audio_level", level=_level(peak)))
+                    peak, last = 0.0, now
+            yield chunk
+
     async def _end_session(self, status: SessionStatus) -> Session:
         assert self._session is not None
+        self._recorded_before, self._recording_since = self._elapsed(), None
         if self._flush_task is not None:
             self._flush_task.cancel()
             self._flush_task = None
@@ -396,6 +536,13 @@ class LiveSessionManager:
             self._broadcast(self._status())
             self._broadcast(TranscriptSnapshot(type="transcript_snapshot", segments=[]))
         await self._broadcast_sessions()
+
+    async def search(self, query: str) -> SearchResultsMessage:
+        try:
+            hits = await self._store.search(query)
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        return SearchResultsMessage(type="search_results", query=query, hits=hits)
 
     # --- notes ------------------------------------------------------------------------------
 
@@ -552,8 +699,8 @@ class LiveSessionManager:
 
     # --- export -------------------------------------------------------------------------------
 
-    async def export_session(self, session_id: str) -> ExportedMessage:
-        """Write notes (if any) and the full transcript as one standalone HTML file."""
+    async def export_session(self, session_id: str, fmt: ExportFormat = "html") -> ExportedMessage:
+        """Write notes (if any) and the full transcript as one standalone HTML or PDF file."""
         try:
             found = await self._store.get_session(session_id)
             notes = await self._store.get_notes(session_id) if found else None
@@ -573,17 +720,24 @@ class LiveSessionManager:
 
         def write() -> Path:
             directory.mkdir(parents=True, exist_ok=True)
-            path = export_filename(session, notes, directory)
-            path.write_text(render_session_html(session, segments, notes), encoding="utf-8")
+            if fmt == "pdf":
+                pdf = render_session_pdf(session, segments, notes)
+                path = export_filename(session, notes, directory, ".pdf")
+                path.write_bytes(pdf)
+            else:
+                path = export_filename(session, notes, directory)
+                path.write_text(render_session_html(session, segments, notes), encoding="utf-8")
             return path
 
         try:
             path = await asyncio.to_thread(write)
+        except PdfUnavailableError as err:
+            raise SessionError("export_failed", str(err)) from None
         except OSError as err:
             raise SessionError(
                 "export_failed", f"Couldn't write the export to {directory}: {err.strerror or err}."
             ) from None
-        log.info("export.done", session_id=session_id, path=str(path))
+        log.info("export.done", session_id=session_id, format=fmt, path=str(path))
         return ExportedMessage(
             type="exported", session_id=session_id, path=str(path), filename=path.name
         )
@@ -691,3 +845,155 @@ class LiveSessionManager:
         return LlmTestMessage(
             type="llm_test", ok=True, message=f"Connected to {provider_name(cfg)} ({cfg.model})."
         )
+
+    # --- speech settings (Settings → Speech) ------------------------------------------------
+
+    async def load_saved_speech_settings(self) -> None:
+        """Apply the speech model/language saved in the app; they override config.toml."""
+        try:
+            raw = await self._store.get_setting(STT_SETTINGS_KEY)
+        except StorageError as err:
+            log.warning("settings.load_failed", error=str(err))
+            return
+        if raw is None:
+            return
+        try:
+            saved = SpeechSettings.model_validate_json(raw)
+        except ValueError:
+            log.warning("settings.invalid_saved_speech_settings")
+            return
+        self._apply_speech_settings(saved)
+
+    def _apply_speech_settings(self, saved: SpeechSettings) -> None:
+        stt = self._settings.stt.model_copy(update=saved.model_dump())
+        self._settings = self._settings.model_copy(update={"stt": stt})
+        self._transcriber.configure(stt)
+
+    async def speech_settings_message(self) -> SpeechSettingsMessage:
+        models_dir = self._settings.paths.resolved_models_dir()
+        current = self._settings.stt.model
+        infos = list(catalog.SPEECH_MODELS)
+        if all(m.name != current for m in infos):  # a custom model from config.toml
+            infos.append(catalog.SpeechModelInfo(current, current, 0, "Set in config.toml."))
+
+        def options() -> list[SpeechModelOption]:
+            return [
+                SpeechModelOption(
+                    name=m.name,
+                    label=m.label,
+                    size_mb=m.size_mb,
+                    description=m.description,
+                    english_only=m.english_only or catalog.is_english_only(m.name),
+                    downloaded=catalog.is_downloaded(m.name, models_dir),
+                )
+                for m in infos
+            ]
+
+        return SpeechSettingsMessage(
+            type="speech_settings",
+            settings=SpeechSettings(model=current, language=self._settings.stt.language),
+            models=await asyncio.to_thread(options),
+            languages=[
+                LanguageOption(code=code, name=name)
+                for code, name in sorted(catalog.LANGUAGES.items(), key=lambda kv: kv[1])
+            ],
+        )
+
+    async def save_speech_settings(self, settings: SpeechSettings) -> None:
+        """Save the speech model and language. The model starts downloading/loading now (if
+        it isn't ready yet); a new language applies from the next sentence."""
+        model_changed = settings.model != self._settings.stt.model
+        if model_changed and self._state != "idle":
+            raise SessionError("session_busy", "Stop the recording before changing the model.")
+        if model_changed and self._model_task is not None and not self._model_task.done():
+            raise SessionError(
+                "session_busy", "Wait until the current speech model has finished loading."
+            )
+        if catalog.is_english_only(settings.model) and settings.language not in (None, "en"):
+            name = catalog.LANGUAGES[settings.language or "en"]
+            raise SessionError(
+                "bad_message",
+                f"{_model_label(settings.model)} only understands English. Pick another speech "
+                f"model to transcribe {name}.",
+            )
+        try:
+            await self._store.set_setting(STT_SETTINGS_KEY, settings.model_dump_json())
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        self._apply_speech_settings(settings)
+        log.info("settings.stt_saved", model=settings.model, language=settings.language)
+        if model_changed:
+            self._model_task, self._speech_model = None, None
+        self.warm_up()  # choosing a model (also during first-run setup) means: get it ready
+        self._broadcast(await self.speech_settings_message())
+        self._broadcast(self._status())
+
+    # --- first run ----------------------------------------------------------------------------
+
+    async def finish_onboarding(self) -> None:
+        try:
+            await self._store.set_setting(ONBOARDED_KEY, "1")
+        except StorageError as err:
+            raise SessionError("storage_failed", str(err)) from None
+        self._onboarded = True
+        self.warm_up()  # no-op if the model was already picked (and is loading) during setup
+        self._broadcast(self._status())
+
+    async def capture_permission(
+        self, action: str, platform_name: str = sys.platform
+    ) -> CapturePermissionMessage:
+        try:
+            if action == "request":
+                await asyncio.to_thread(capture_permission.request, platform_name)
+            elif action == "open_settings":
+                capture_permission.open_settings(platform_name)
+            state, message = await asyncio.to_thread(capture_permission.check, platform_name)
+        except Exception as err:
+            log.warning("capture.permission_check_failed", error=str(err))
+            state, message = "unknown", f"Couldn't check the audio permission: {err}"
+        return CapturePermissionMessage(type="capture_permission", state=state, message=message)
+
+    # --- diagnostics --------------------------------------------------------------------------
+
+    async def diagnostics(self) -> DiagnosticsMessage:
+        """A report to paste into a bug report. Never includes keys or transcript text."""
+        cfg = self._settings
+        models_dir = cfg.paths.resolved_models_dir()
+        downloaded = await asyncio.to_thread(catalog.is_downloaded, cfg.stt.model, models_dir)
+        try:
+            sessions: int | str = len(await self._store.list_sessions())
+        except StorageError as err:
+            sessions = f"unavailable ({err})"
+        path = logfile.log_file()
+        lines = [
+            f"Scribely {__version__}",
+            f"OS: {platform.platform()} ({platform.machine()})",
+            f"Python: {platform.python_version()}",
+            f"State: {self._state}",
+            f"Capture backend: {cfg.capture.backend}",
+            f"Speech model: {cfg.stt.model} ({'downloaded' if downloaded else 'not downloaded'}), "
+            f"device {cfg.stt.device}, language {cfg.stt.language or 'auto'}",
+            f"Speech model state: {self._speech_model.state if self._speech_model else 'idle'}",
+            f"Notes model: {provider_name(cfg.llm)} · {cfg.llm.model} "
+            f"(API key: {self._credentials.source(cfg.llm.provider)})",
+            f"Notes issue: {self._llm_issue or 'none'}",
+            f"Sessions: {sessions}",
+            f"Data folder: {cfg.paths.resolved_data_dir()}",
+            f"Log file: {path or 'off'}",
+            "",
+            "--- recent log ---",
+            *logfile.tail(),
+        ]
+        return DiagnosticsMessage(
+            type="diagnostics", text="\n".join(lines), log_path=str(path) if path else None
+        )
+
+
+def _model_label(name: str) -> str:
+    return next((m.label for m in catalog.SPEECH_MODELS if m.name == name), name)
+
+
+def _level(rms: float) -> float:
+    """RMS amplitude -> 0..1 on a dB scale (LEVEL_FLOOR_DB and below read as silence)."""
+    db = 20 * math.log10(rms) if rms > 0 else LEVEL_FLOOR_DB
+    return min(1.0, max(0.0, (db - LEVEL_FLOOR_DB) / -LEVEL_FLOOR_DB))

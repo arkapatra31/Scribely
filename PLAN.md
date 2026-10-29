@@ -45,7 +45,7 @@ The hardest, most platform-specific piece — de-risk it early.
 - **3.1 SQLite (WAL)** — schema for sessions, transcript segments, notes, checkpoints; `platformdirs` location.
 - **3.2 Session lifecycle** — start/stop, in-memory rolling window for live display, batched durable writes; crash-safe + resumable.
   - D: 0.2, 2.2 · DoD: a recording survives an app kill mid-session and reloads from SQLite.
-- **3.3 Session list** — sidebar of saved sessions; open any past session's transcript (also while recording), rename, delete. Sessions cut off by a crash reappear as *interrupted* with their saved segments. ✅
+- **3.3 Session list** — sidebar of saved sessions; open any past session's transcript (also while recording), rename, delete. Sessions cut off by a crash reappear as *interrupted* with their saved segments. ✅ Search across titles, notes and transcripts; transcript hits jump to the line. ✅
 
 ---
 
@@ -59,8 +59,8 @@ The hardest, most platform-specific piece — de-risk it early.
 
 ## Phase 5 · Desktop shell + live UI  ← first end-to-end slice
 
-- **5.1 Tauri shell** — native window, tray, and **launching/supervising the Python sidecar**. ✅ launches the backend (bundled binary, or `uv run` in dev), reuses one already running, stops its process tree on quit; the backend exits on its own if the app dies (parent-pid watchdog). Tray pending.
-- **5.2 Live transcript view** — typed WS client; record/pause/stop controls; streaming transcript; recording indicator + timer. ✅ record/stop (pause later), live partials, offline/error banners.
+- **5.1 Tauri shell** — native window, tray, and **launching/supervising the Python sidecar**. ✅ launches the backend (bundled binary, or `uv run` in dev), reuses one already running, stops its process tree on quit; the backend exits on its own if the app dies (parent-pid watchdog). Tray / menu-bar icon (Start/Stop, Pause/Resume, Show, Quit), close-to-tray, global shortcut ⌘⇧⌥R / Ctrl+Shift+Alt+R. ✅
+- **5.2 Live transcript view** — typed WS client; record/pause/stop controls; streaming transcript; recording indicator + timer. ✅ record/pause/resume/stop (paused time left out of timer and timestamps), live audio-level meter with a "no sound" hint, spoken-language picker, live partials, offline/error banners.
   - D: 4.2 · DoD: **vertical slice works** — open app → record → watch live transcript stream from real captured audio → stop. (No notes yet.)
 
 ---
@@ -88,15 +88,15 @@ The hardest, most platform-specific piece — de-risk it early.
 ## Phase 8 · Export
 
 - **8.1 HTML export** — Jinja2 template → beautified, standalone, shareable HTML with working timestamp links. ✅ notes + full transcript, light/dark/print, no external assets, saved to `data/exports/` with Show in Finder.
-- **8.2 (Later) PDF** — WeasyPrint.
+- **8.2 PDF** — WeasyPrint. ✅ styled like the app's Notes view (bundled Inter + Newsreader), page numbers, transcript on its own pages. Needs Pango (`brew install pango` on macOS).
   - D: 7.1 · DoD: Export produces a self-contained HTML file that opens cleanly in any browser.
 
 ---
 
 ## Phase 9 · Settings & configuration UI
 
-- **9.1 Settings panel** — edit LLM provider, model, credentials, Ollama host, chunk size, theme; live validation (credential check for cloud providers, `/api/tags` for Ollama).
-- **9.2 Empty/onboarding states** — first-run guidance (pick a provider — Azure OpenAI default, or Anthropic / OpenAI / Gemini / Ollama — pick a model, grant mac permission).
+- **9.1 Settings panel** — edit LLM provider, model, credentials, Ollama host, chunk size, theme; live validation (credential check for cloud providers, `/api/tags` for Ollama). ✅ Speech tab (language, Whisper model with download progress), Notes model tab (provider, model, key, Test connection), Help tab (shortcut, Copy diagnostics).
+- **9.2 Empty/onboarding states** — first-run guidance (pick a provider — Azure OpenAI default, or Anthropic / OpenAI / Gemini / Ollama — pick a model, grant mac permission). ✅ language + speech model (downloaded with progress; nothing is downloaded before you choose), macOS audio permission check/request/System Settings, notes model.
   - D: 4.1, 5.1 · DoD: a new user can configure provider + model and start their first session without touching files.
 
 ---
@@ -104,7 +104,8 @@ The hardest, most platform-specific piece — de-risk it early.
 ## Phase 10 · Cross-cutting & polish
 
 - **10.1 Theming** — ship the chosen direction (Scribely visual identity); light/dark + warm night mode; reduced-motion.
-- **10.2 Observability** — `structlog` logging, actionable error surfacing throughout.
+- **10.2 Observability** — `structlog` logging, actionable error surfacing throughout. ✅ console + rotating `data/logs/scribely.log` (local only); diagnostics report without keys or transcripts.
+- **10.4 CI** — ✅ GitHub Actions on every PR: backend (ruff, format, mypy, pytest) on macOS/Windows/Linux, frontend (schema generation, tsc, build), Rust shell (fmt, clippy, tests) on all three.
 - **10.3 UX calm pass** — focus mode, gentle motion, comfortable reading column, inviting empty states.
   - D: most prior phases · DoD: the app feels finished and calm; errors are plain-language.
 

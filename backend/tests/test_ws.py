@@ -90,3 +90,38 @@ def test_saved_sessions_over_websocket(client: TestClient) -> None:
         ws.send_text(json.dumps({"type": "open_session", "session_id": session_id}))
         err = receive_until(ws, lambda m: m["type"] == "error")[-1]
         assert err["code"] == "not_found"
+
+
+def test_new_commands_reply_to_the_sender(client: TestClient) -> None:
+    with client.websocket_connect("/ws") as ws:
+        for _ in range(3):
+            ws.receive_text()
+        replies = {}
+        for command in (
+            {"type": "pause"},
+            {"type": "search_sessions", "query": "cells"},
+            {"type": "get_speech_settings"},
+            {"type": "capture_permission", "action": "check"},
+            {"type": "get_diagnostics"},
+        ):
+            ws.send_text(json.dumps(command))
+            reply = json.loads(ws.receive_text())
+            replies[command["type"]] = reply
+    assert replies["pause"]["code"] == "not_recording"
+    assert replies["search_sessions"] == {"type": "search_results", "query": "cells", "hits": []}
+    assert replies["get_speech_settings"]["settings"]["model"] == "small"
+    assert replies["capture_permission"]["type"] == "capture_permission"
+    assert replies["get_diagnostics"]["text"].startswith("Scribely ")
+
+
+def test_unknown_language_is_a_bad_message(client: TestClient) -> None:
+    with client.websocket_connect("/ws") as ws:
+        for _ in range(3):
+            ws.receive_text()
+        ws.send_text(
+            json.dumps(
+                {"type": "save_speech_settings", "settings": {"model": "small", "language": "zz"}}
+            )
+        )
+        reply = json.loads(ws.receive_text())
+    assert reply["code"] == "bad_message" and "Unknown language" in reply["message"]
