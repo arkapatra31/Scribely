@@ -133,6 +133,9 @@ logs/
 checkpoints/
 langchain_cache/
 
+# Local app data when running from source: database, speech models, exports
+/data/
+
 # platformdirs app-data written during dev runs
 app_data/
 

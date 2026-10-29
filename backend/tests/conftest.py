@@ -15,3 +15,5 @@ def _isolated_config_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     monkeypatch.setattr(
         "scribely.config.user_config_path", lambda *a, **k: tmp_path / "user-config"
     )
+    # A stand-in source checkout, so the developer's real config.toml and data/ stay out.
+    monkeypatch.setattr("scribely.config.project_root", lambda: tmp_path / "project")

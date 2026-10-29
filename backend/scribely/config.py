@@ -3,7 +3,11 @@
 The config file is looked up in this order:
 1. the path in the ``SCRIBELY_CONFIG`` environment variable,
 2. ``config.toml`` in the current working directory,
-3. ``config.toml`` in the per-user config dir (via ``platformdirs``).
+3. ``config.toml`` at the project root, when running from a source checkout,
+4. ``config.toml`` in the per-user config dir (via ``platformdirs``).
+
+Data (database, speech models, exports) lives in ``<project root>/data`` when running
+from a source checkout, and in the per-user data dir for packaged builds.
 
 If none exists, built-in defaults are used. Provider API keys are never read
 from the config file; LLM SDKs pick them up from their standard environment
@@ -13,6 +17,7 @@ variables (e.g. ``AZURE_OPENAI_API_KEY``, ``ANTHROPIC_API_KEY``).
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Literal, Self
@@ -33,6 +38,21 @@ CONFIG_FILENAME = "config.toml"
 LLMProvider = Literal["azure_openai", "anthropic", "openai", "gemini", "ollama"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 CaptureBackend = Literal["auto", "wasapi", "screencapturekit", "file"]
+
+
+def project_root() -> Path | None:
+    """The source checkout the backend runs from, or None for a packaged (frozen) build."""
+    if getattr(sys, "frozen", False):
+        return None
+    root = Path(__file__).resolve().parents[2]
+    return root if (root / "backend" / "pyproject.toml").is_file() else None
+
+
+def _resolve(path: Path) -> Path:
+    """Expand ~; relative paths are relative to the project root (if any), not the cwd."""
+    path = path.expanduser()
+    root = project_root()
+    return root / path if not path.is_absolute() and root is not None else path
 
 
 class ConfigError(Exception):
@@ -128,17 +148,18 @@ class PathsConfig(_Section):
 
     def resolved_data_dir(self) -> Path:
         if self.data_dir is not None:
-            return self.data_dir.expanduser()
-        return user_data_path(APP_NAME, appauthor=False)
+            return _resolve(self.data_dir)
+        root = project_root()
+        return root / "data" if root is not None else user_data_path(APP_NAME, appauthor=False)
 
     def resolved_exports_dir(self) -> Path:
         if self.exports_dir is not None:
-            return self.exports_dir.expanduser()
+            return _resolve(self.exports_dir)
         return self.resolved_data_dir() / "exports"
 
     def resolved_models_dir(self) -> Path:
         if self.models_dir is not None:
-            return self.models_dir.expanduser()
+            return _resolve(self.models_dir)
         return self.resolved_data_dir() / "models"
 
 
@@ -181,8 +202,10 @@ def find_config_file() -> Path | None:
         if not path.is_file():
             raise ConfigError(f"{CONFIG_ENV_VAR} points to {path}, but no file exists there.")
         return path
+    root = project_root()
     for candidate in (
         Path.cwd() / CONFIG_FILENAME,
+        *([root / CONFIG_FILENAME] if root is not None else []),
         user_config_path(APP_NAME, appauthor=False) / CONFIG_FILENAME,
     ):
         if candidate.is_file():
