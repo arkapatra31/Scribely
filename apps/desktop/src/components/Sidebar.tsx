@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
-import { CircleAlert, NotebookPen, Settings, Sparkles, Trash2 } from "lucide-react";
-import type { SessionSummary } from "@scribely/schemas";
-import { dayGroup, formatDuration, formatTime, sessionTitle } from "../format";
+import {
+  AudioLines,
+  CircleAlert,
+  NotebookPen,
+  Search,
+  Settings,
+  Sparkles,
+  Trash2,
+  Type,
+  X,
+} from "lucide-react";
+import type { SearchHit, SearchResultsMessage, SessionSummary } from "@scribely/schemas";
+import { dayGroup, formatClock, formatDuration, formatTime, sessionTitle } from "../format";
+
+const SEARCH_DEBOUNCE_MS = 200;
 
 interface Props {
   sessions: SessionSummary[];
@@ -9,14 +21,24 @@ interface Props {
   recordingId: string | null;
   connection: { label: string; tone: "ok" | "busy" | "off" };
   llm: { label: string; ready: boolean } | null;
+  search: SearchResultsMessage | null;
+  onSearch: (query: string) => void;
+  onOpenHit: (hit: SearchHit) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onOpenSettings: () => void;
 }
 
 export function Sidebar(props: Props) {
-  const { sessions, selectedId, recordingId, connection, llm } = props;
+  const { sessions, selectedId, recordingId, connection, llm, onSearch } = props;
   const groups = groupByDay(sessions);
+  const [query, setQuery] = useState("");
+  const searching = query.trim() !== "";
+
+  useEffect(() => {
+    const id = setTimeout(() => onSearch(query), query.trim() ? SEARCH_DEBOUNCE_MS : 0);
+    return () => clearTimeout(id);
+  }, [query, onSearch]);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-paper-sunken">
@@ -45,8 +67,43 @@ export function Sidebar(props: Props) {
         </span>
       </div>
 
+      {sessions.length > 0 && (
+        <div className="px-3 pb-2">
+          <label className="flex items-center gap-2 rounded-xl border border-line bg-paper-raised/70 px-3 py-1.5 text-sm transition focus-within:border-accent focus-within:bg-paper-raised">
+            <Search className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+              placeholder="Search sessions"
+              aria-label="Search titles, notes and transcripts"
+              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-faint [&::-webkit-search-cancel-button]:hidden"
+            />
+            {searching && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="rounded p-0.5 text-ink-faint hover:text-ink"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </label>
+        </div>
+      )}
+
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4" aria-label="Sessions">
-        {sessions.length === 0 ? (
+        {searching ? (
+          <SearchResults
+            query={query}
+            results={props.search}
+            sessions={sessions}
+            selectedId={selectedId}
+            onOpenHit={props.onOpenHit}
+          />
+        ) : sessions.length === 0 ? (
           <div className="mx-2 mt-2 rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-ink-muted">
             Your recordings will appear here.
           </div>
@@ -170,6 +227,83 @@ function SessionItem({ summary, selected, recording, onOpen, onDelete }: ItemPro
         </button>
       )}
     </li>
+  );
+}
+
+const FIELD_ICONS = { title: Type, notes: Sparkles, transcript: AudioLines } as const;
+
+function SearchResults(props: {
+  query: string;
+  results: SearchResultsMessage | null;
+  sessions: SessionSummary[];
+  selectedId: string | null;
+  onOpenHit: (hit: SearchHit) => void;
+}) {
+  const { results, sessions } = props;
+  // Results for an older query stay up while the new one is on its way.
+  if (results === null) return null;
+  if (results.hits.length === 0) {
+    return (
+      <p className="px-3 py-6 text-center text-sm text-ink-muted">
+        Nothing matches “{props.query.trim()}”.
+      </p>
+    );
+  }
+  const byId = new Map(sessions.map((s) => [s.session.id, s.session]));
+  return (
+    <ul className="space-y-0.5 pt-1">
+      {results.hits.map((hit) => {
+        const session = byId.get(hit.session_id);
+        if (!session) return null;
+        const Icon = FIELD_ICONS[hit.field];
+        return (
+          <li key={hit.session_id}>
+            <button
+              type="button"
+              onClick={() => props.onOpenHit(hit)}
+              aria-current={hit.session_id === props.selectedId ? "true" : undefined}
+              className={`w-full rounded-xl px-3 py-2.5 text-left transition ${
+                hit.session_id === props.selectedId
+                  ? "bg-paper-raised shadow-soft"
+                  : "hover:bg-paper-raised/60"
+              }`}
+            >
+              <span className="block truncate text-sm font-medium">{sessionTitle(session)}</span>
+              {hit.field !== "title" && (
+                <span className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-muted">
+                  <Highlight text={hit.snippet} query={results.query} />
+                </span>
+              )}
+              <span className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-faint">
+                <Icon className="h-3 w-3" aria-hidden />
+                {hit.field === "transcript"
+                  ? `Transcript${hit.start != null ? ` · ${formatClock(hit.start)}` : ""}`
+                  : hit.field === "notes"
+                    ? "Notes"
+                    : "Title"}
+                <span>·</span>
+                {formatTime(session.started_at)}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim().toLowerCase();
+  const at = q ? text.toLowerCase().indexOf(q) : -1;
+  if (at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className="rounded bg-accent-soft px-0.5 text-accent-ink">
+        {text.slice(at, at + q.length)}
+      </mark>
+      {text.slice(at + q.length)}
+    </>
   );
 }
 

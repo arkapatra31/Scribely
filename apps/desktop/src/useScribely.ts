@@ -1,4 +1,11 @@
-import type { LlmSettings, NoteDoc, RestructureCommand } from "@scribely/schemas";
+import type {
+  CapturePermissionCommand,
+  ExportSessionCommand,
+  LlmSettings,
+  NoteDoc,
+  RestructureCommand,
+  SpeechSettings,
+} from "@scribely/schemas";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { initialState, reducer } from "./state";
 import { type ClientMessage, DEFAULT_WS_URL, ScribelyClient } from "./ws/client";
@@ -22,13 +29,23 @@ export function useScribely(url: string = DEFAULT_WS_URL) {
 
   // Settings (and whether an API key has been entered this session) on every (re)connect.
   useEffect(() => {
-    if (state.connection === "open") send({ type: "get_llm_settings" });
+    if (state.connection !== "open") return;
+    send({ type: "get_llm_settings" });
+    send({ type: "get_speech_settings" });
   }, [state.connection, send]);
+
+  // The model list shows what's downloaded; refresh it when a model finishes loading.
+  const modelState = state.speechModel?.state;
+  useEffect(() => {
+    if (modelState === "ready") send({ type: "get_speech_settings" });
+  }, [modelState, send]);
 
   return {
     state,
     start: useCallback(() => send({ type: "start" }), [send]),
     stop: useCallback(() => send({ type: "stop" }), [send]),
+    pause: useCallback(() => send({ type: "pause" }), [send]),
+    resume: useCallback(() => send({ type: "resume" }), [send]),
     openSession: useCallback(
       (session_id: string) => send({ type: "open_session", session_id }),
       [send],
@@ -70,9 +87,27 @@ export function useScribely(url: string = DEFAULT_WS_URL) {
       [send],
     ),
     exportSession: useCallback(
-      (session_id: string) => send({ type: "export_session", session_id }),
+      (session_id: string, format: ExportSessionCommand["format"] = "html") =>
+        send({ type: "export_session", session_id, format }),
       [send],
     ),
+    saveSpeechSettings: useCallback(
+      (settings: SpeechSettings) => send({ type: "save_speech_settings", settings }),
+      [send],
+    ),
+    search: useCallback((query: string) => {
+      if (query.trim()) send({ type: "search_sessions", query });
+      else dispatch({ kind: "clearSearch" });
+    }, [send]),
+    capturePermission: useCallback(
+      (action: CapturePermissionCommand["action"]) => send({ type: "capture_permission", action }),
+      [send],
+    ),
+    finishOnboarding: useCallback(() => send({ type: "finish_onboarding" }), [send]),
+    getDiagnostics: useCallback(() => {
+      dispatch({ kind: "clearDiagnostics" });
+      send({ type: "get_diagnostics" });
+    }, [send]),
     revealExport: useCallback((path: string) => send({ type: "reveal_export", path }), [send]),
     dismissExported: useCallback(() => dispatch({ kind: "dismissExported" }), []),
     showLive: useCallback(() => dispatch({ kind: "showLive" }), []),

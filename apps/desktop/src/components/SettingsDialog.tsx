@@ -1,7 +1,25 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CircleCheck, Cloud, Cpu, LoaderCircle, TriangleAlert, X } from "lucide-react";
-import type { LlmSettings, LlmSettingsMessage, LlmTestMessage } from "@scribely/schemas";
+import { CircleCheck, ClipboardCopy, Cloud, Cpu, LoaderCircle, TriangleAlert, X } from "lucide-react";
+import type {
+  DiagnosticsMessage,
+  LlmSettings,
+  LlmSettingsMessage,
+  LlmTestMessage,
+  SpeechModelMessage,
+  SpeechSettings,
+  SpeechSettingsMessage,
+} from "@scribely/schemas";
+import { SHORTCUT_LABEL } from "../shell";
+import { SpeechSettingsPanel } from "./SpeechSettingsPanel";
+
+export type SettingsTab = "speech" | "notes" | "help";
+
+const TABS: { value: SettingsTab; label: string }[] = [
+  { value: "speech", label: "Speech" },
+  { value: "notes", label: "Notes model" },
+  { value: "help", label: "Help" },
+];
 
 type Provider = LlmSettings["provider"];
 
@@ -15,6 +33,14 @@ const PROVIDERS: { value: Provider; label: string; note: string; keyEnv?: string
 
 interface Props {
   open: boolean;
+  /** The tab shown when the dialog opens. */
+  initialTab: SettingsTab;
+  speech: SpeechSettingsMessage | null;
+  speechModel: SpeechModelMessage | null;
+  recording: boolean;
+  onSaveSpeech: (settings: SpeechSettings) => void;
+  diagnostics: DiagnosticsMessage | null;
+  onGetDiagnostics: () => void;
   message: LlmSettingsMessage | null;
   llmIssue: string | null;
   test: LlmTestMessage | "pending" | null;
@@ -23,8 +49,13 @@ interface Props {
   onTest: () => void;
 }
 
-export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave, onTest }: Props) {
+export function SettingsDialog(props: Props) {
+  const { open, message, llmIssue, test, onClose, onSave, onTest } = props;
   const ids = useId();
+  const [tab, setTab] = useState<SettingsTab>(props.initialTab);
+  useEffect(() => {
+    if (open) setTab(props.initialTab);
+  }, [open, props.initialTab]);
   const [form, setForm] = useState<LlmSettings | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [dirty, setDirty] = useState(false);
@@ -101,24 +132,54 @@ export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave,
               <X className="h-4 w-4" />
             </button>
             <h2 id={`${ids}-title`} className="font-serif text-2xl font-semibold tracking-tight">
-              Notes model
+              Settings
             </h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              Used only when you press Summarize. Only the transcript text is sent.
-            </p>
+            <div role="tablist" className="mt-4 flex gap-1 rounded-full bg-paper-sunken p-1">
+              {TABS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.value}
+                  onClick={() => setTab(t.value)}
+                  className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                    tab === t.value
+                      ? "bg-paper-raised text-ink shadow-soft"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-            {!form ? (
+            {tab === "speech" ? (
+              <div className="mt-6">
+                <SpeechSettingsPanel
+                  message={props.speech}
+                  speechModel={props.speechModel}
+                  recording={props.recording}
+                  onSave={props.onSaveSpeech}
+                />
+              </div>
+            ) : tab === "help" ? (
+              <HelpTab diagnostics={props.diagnostics} onGetDiagnostics={props.onGetDiagnostics} />
+            ) : !form ? (
               <p className="mt-6 flex items-center gap-2 text-sm text-ink-muted">
                 <LoaderCircle className="h-4 w-4 animate-spin" /> Loading…
               </p>
             ) : (
               <form
                 className="mt-6 space-y-4"
+                aria-describedby={`${ids}-notes-hint`}
                 onSubmit={(e) => {
                   e.preventDefault();
                   save();
                 }}
               >
+                <p id={`${ids}-notes-hint`} className="text-sm text-ink-muted">
+                  Used only when you press Summarize. Only the transcript text is sent.
+                </p>
                 <fieldset>
                   <legend className="mb-2 text-sm font-medium">Provider</legend>
                   <div className="grid grid-cols-5 gap-2">
@@ -291,6 +352,74 @@ export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave,
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+function HelpTab(props: {
+  diagnostics: DiagnosticsMessage | null;
+  onGetDiagnostics: () => void;
+}) {
+  const { diagnostics, onGetDiagnostics } = props;
+  const [copy, setCopy] = useState<"idle" | "pending" | "copied" | "failed">("idle");
+  const fallback = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (copy !== "pending" || !diagnostics) return;
+    navigator.clipboard
+      .writeText(diagnostics.text)
+      .then(() => setCopy("copied"))
+      .catch(() => setCopy("failed"));
+  }, [copy, diagnostics]);
+  useEffect(() => {
+    if (copy === "failed") fallback.current?.select();
+  }, [copy]);
+
+  return (
+    <div className="mt-6 space-y-5 text-sm">
+      <section>
+        <h3 className="font-medium">Keyboard shortcut</h3>
+        <p className="mt-1 text-ink-muted">
+          <kbd className="rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-xs">
+            {SHORTCUT_LABEL}
+          </kbd>{" "}
+          starts or stops recording from anywhere, even when Scribely is in the background.
+        </p>
+      </section>
+      <section>
+        <h3 className="font-medium">Something not working?</h3>
+        <p className="mt-1 text-ink-muted">
+          Copy a diagnostics report and paste it into your bug report. It has version numbers,
+          settings and recent log lines — never API keys or transcripts.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setCopy("pending");
+            onGetDiagnostics();
+          }}
+          disabled={copy === "pending"}
+          className="mt-3 inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-ink transition hover:bg-paper-sunken disabled:opacity-50"
+        >
+          {copy === "copied" ? (
+            <CircleCheck className="h-4 w-4 text-ok" />
+          ) : (
+            <ClipboardCopy className="h-4 w-4" />
+          )}
+          {copy === "copied" ? "Copied" : "Copy diagnostics"}
+        </button>
+        {copy === "failed" && diagnostics && (
+          <textarea
+            ref={fallback}
+            readOnly
+            value={diagnostics.text}
+            className="mt-3 h-40 w-full rounded-xl border border-line bg-paper p-2 font-mono text-[11px]"
+          />
+        )}
+        {diagnostics?.log_path && (
+          <p className="mt-3 break-all text-xs text-ink-faint">Log file: {diagnostics.log_path}</p>
+        )}
+      </section>
+    </div>
   );
 }
 
