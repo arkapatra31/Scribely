@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Pencil, Sparkles } from "lucide-react";
 import type { SessionNotes } from "@scribely/schemas";
 import { formatClock, formatDate } from "../format";
 
@@ -11,12 +11,20 @@ const PROVIDERS: Record<string, string> = {
   ollama: "Ollama",
 };
 
+const STYLE_LABELS: Record<string, string> = {
+  outline: "Study outline",
+  qa: "Questions & answers",
+  condensed: "Condensed",
+};
+
 interface Props {
   notes: SessionNotes;
+  busy: boolean;
   onJump: (seconds: number) => void;
+  onEdit: () => void;
 }
 
-export function NotesView({ notes, onJump }: Props) {
+export function NotesView({ notes, busy, onJump, onEdit }: Props) {
   const reduceMotion = useReducedMotion();
   const { doc } = notes;
   return (
@@ -26,6 +34,22 @@ export function NotesView({ notes, onJump }: Props) {
       transition={{ duration: 0.3 }}
       className="mx-auto max-w-3xl px-10 py-10"
     >
+      <div className="mb-3 flex items-center gap-2">
+        {STYLE_LABELS[notes.style ?? "standard"] && (
+          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-ink">
+            {STYLE_LABELS[notes.style ?? "standard"]}
+          </span>
+        )}
+        {notes.edited && <span className="text-xs text-ink-faint">Edited</span>}
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={busy}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm text-ink-muted transition hover:bg-paper-sunken hover:text-ink disabled:opacity-40"
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+        </button>
+      </div>
       <h2 className="font-serif text-[1.75rem] font-semibold leading-snug tracking-tight">
         {doc.title}
       </h2>
@@ -72,6 +96,7 @@ export function NotesView({ notes, onJump }: Props) {
       <p className="mt-14 border-t border-line pt-4 text-xs text-ink-faint">
         Written by {PROVIDERS[notes.provider] ?? notes.provider} · {notes.model} ·{" "}
         {formatDate(notes.created_at)}
+        {notes.edited && " · edited by you"}
       </p>
     </motion.article>
   );

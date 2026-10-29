@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
 import { Notice } from "./components/Notice";
 import { RecordDock } from "./components/RecordDock";
@@ -28,9 +28,15 @@ export default function App() {
     getLlmSettings,
     saveLlmSettings,
     testLlm,
+    restructure,
+    updateNotes,
+    exportSession,
+    revealExport,
+    dismissExported,
     showLive,
     dismissError,
   } = useScribely();
+  const starting = useStarting(state.everConnected);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = () => {
     getLlmSettings();
@@ -76,9 +82,24 @@ export default function App() {
 
       <main className="relative flex min-w-0 flex-1 flex-col">
         <div data-tauri-drag-region className="h-0 shrink-0 [.platform-mac_&]:h-7" />
-        <Notice show={state.connection === "closed"} kind="offline">
-          Can't reach the Scribely backend. Start it by running “uv run scribely-backend” in
+        <Notice show={starting} kind="starting">
+          Starting Scribely… The first launch can take a minute.
+        </Notice>
+        <Notice show={!starting && state.connection === "closed"} kind="offline">
+          Can't reach the Scribely backend. Restart Scribely, or run “uv run scribely-backend” in
           the backend folder.
+        </Notice>
+        <Notice
+          show={state.exported !== null}
+          kind="ok"
+          action={
+            state.exported
+              ? { label: REVEAL_LABEL, onClick: () => revealExport(state.exported!.path) }
+              : undefined
+          }
+          onDismiss={dismissExported}
+        >
+          Exported “{state.exported?.filename}”.
         </Notice>
         <Notice show={state.error !== null} kind="warn" onDismiss={dismissError}>
           {state.error?.message}
@@ -104,6 +125,9 @@ export default function App() {
             llmIssue={llmIssue}
             onRename={(title) => renameSession(shown.id, title)}
             onSummarize={() => summarize(shown.id)}
+            onRestructure={(style) => restructure(shown.id, style)}
+            onUpdateNotes={(doc) => updateNotes(shown.id, doc)}
+            onExport={() => exportSession(shown.id)}
             onOpenSettings={openSettings}
             onBackToLive={viewingSaved && recording ? showLive : undefined}
           />
@@ -135,6 +159,22 @@ export default function App() {
       />
     </div>
   );
+}
+
+const REVEAL_LABEL = /Mac/.test(navigator.userAgent)
+  ? "Show in Finder"
+  : /Win/.test(navigator.userAgent)
+    ? "Show in Explorer"
+    : "Open folder";
+
+/** True while the app has just opened and the backend it launched is still starting. */
+function useStarting(everConnected: boolean): boolean {
+  const [gracePeriod, setGracePeriod] = useState(true);
+  useEffect(() => {
+    const id = setTimeout(() => setGracePeriod(false), 60_000);
+    return () => clearTimeout(id);
+  }, []);
+  return gracePeriod && !everConnected;
 }
 
 function connected(state: AppState): boolean {
