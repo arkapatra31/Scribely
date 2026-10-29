@@ -65,21 +65,21 @@
   <div class="hero-stage reveal" data-tilt>
     <div class="glow" aria-hidden="true"></div>
     <!-- The app, recreated -->
-    <div class="app" role="img" aria-label="The Scribely app transcribing a biology lecture live, then showing generated notes">
+    <div class="app" role="img" aria-label="The Scribely app transcribing a generative AI lecture live, then showing generated notes">
       <div class="app-side">
         <div class="app-traffic"><i></i><i></i><i></i></div>
         <div class="app-logo"><span></span>Scribely</div>
         <div class="app-search">Search sessions</div>
         <p class="app-group">Today</p>
-        <div class="app-item active"><b>Cellular Respiration</b><small class="rec-label"><i></i>Recording</small></div>
-        <div class="app-item"><b>Linear Algebra · Week 4</b><small>9:12 AM · 48 min ✦</small></div>
+        <div class="app-item active"><b>RAG on Bedrock</b><small class="rec-label"><i></i>Recording</small></div>
+        <div class="app-item"><b>Transformers 101</b><small>9:12 AM · 48 min ✦</small></div>
         <p class="app-group">Yesterday</p>
-        <div class="app-item"><b>Intro to Macroeconomics</b><small>4:30 PM · 1 h 12 min ✦</small></div>
-        <div class="app-item"><b>Organic Chemistry 2</b><small>11:05 AM · 55 min</small></div>
+        <div class="app-item"><b>AWS Lambda Deep Dive</b><small>4:30 PM · 1 h 12 min ✦</small></div>
+        <div class="app-item"><b>Prompt Engineering 101</b><small>11:05 AM · 55 min</small></div>
       </div>
       <div class="app-main">
         <div class="app-head">
-          <h3>Cellular Respiration</h3>
+          <h3>RAG on Amazon Bedrock</h3>
           <p><span>Thu, Oct 29</span><span class="live"><i></i>Live</span></p>
           <div class="app-tabs"><span class="on" data-tab="t">Transcript</span><span data-tab="n">Notes</span><b class="app-sum">✦ Summarize</b></div>
         </div>
@@ -87,10 +87,10 @@
           <ol class="app-transcript" id="demoTranscript"></ol>
           <div class="app-notes" id="demoNotes">
             <span class="pill">Study notes</span>
-            <h4>How Cells Turn Glucose into Energy</h4>
-            <div class="summary"><small>✦ Summary</small>Glycolysis splits glucose in the cytoplasm without oxygen; pyruvate then enters the mitochondria for the Krebs cycle.</div>
-            <div class="sec"><span>01</span><div><b>Glycolysis <em>0:04 – 0:19</em></b><p>Happens in the cytoplasm</p><p>No oxygen needed</p></div></div>
-            <div class="sec"><span>02</span><div><b>Into the mitochondria <em>0:19 – 0:31</em></b><p>Pyruvate feeds the Krebs cycle</p></div></div>
+            <h4>Building RAG on Amazon Bedrock</h4>
+            <div class="summary"><small>✦ Summary</small>Ground a model in your own data: embed documents, store the vectors, retrieve the best matches into the prompt.</div>
+            <div class="sec"><span>01</span><div><b>Indexing <em>0:04 – 0:15</em></b><p>Chunk documents, embed each chunk</p><p>Store vectors in OpenSearch Serverless</p></div></div>
+            <div class="sec"><span>02</span><div><b>Retrieve &amp; generate <em>0:15 – 0:31</em></b><p>Retrieved context grounds the answer</p></div></div>
           </div>
         </div>
         <div class="app-dock">
@@ -154,27 +154,27 @@
         </div>
         <div class="stage s1">
           <ol class="stage-lines">
-            <li><time>0:00</time>Today we're looking at how cells turn glucose into usable energy.</li>
-            <li><time>0:04</time>The first stage, glycolysis, happens in the cytoplasm.</li>
-            <li><time>0:09</time>It doesn't need oxygen, and it splits one glucose into two pyruvate.</li>
-            <li><time>0:15</time>Next, pyruvate moves into the mitochondria for the Krebs cycle.</li>
-            <li class="partial"><time>0:21</time>Each turn of the cycle releases<span class="caret"></span></li>
+            <li><time>0:00</time>Today we're building a retrieval-augmented generation pipeline on Amazon Bedrock.</li>
+            <li><time>0:04</time>First, we split our documents into chunks and turn each chunk into an embedding.</li>
+            <li><time>0:09</time>Those vectors go into a vector store, here OpenSearch Serverless.</li>
+            <li><time>0:15</time>At query time we embed the question and retrieve the closest chunks.</li>
+            <li class="partial"><time>0:21</time><span>The retrieved context goes into the prompt<span class="caret"></span></span></li>
           </ol>
         </div>
         <div class="stage s2">
           <div class="note-doc">
-            <h4>How Cells Turn Glucose into Energy</h4>
-            <div class="summary"><small>✦ Summary</small>Glycolysis splits glucose in the cytoplasm without oxygen, producing pyruvate that fuels the Krebs cycle in the mitochondria.</div>
-            <div class="sec"><span>01</span><div><b>Glycolysis <em>0:04 – 0:15</em></b><p>Takes place in the cytoplasm</p><p>Anaerobic: no oxygen required</p><p>1 glucose → 2 pyruvate</p></div></div>
-            <div class="sec"><span>02</span><div><b>The Krebs cycle <em>0:15 – 0:31</em></b><p>Runs inside the mitochondria</p><p>Releases CO₂ and energy carriers</p></div></div>
+            <h4>Building RAG on Amazon Bedrock</h4>
+            <div class="summary"><small>✦ Summary</small>Retrieval-augmented generation grounds a foundation model in your own documents, so answers stay accurate and current without retraining.</div>
+            <div class="sec"><span>01</span><div><b>Indexing <em>0:04 – 0:15</em></b><p>Split documents into chunks</p><p>Embed each chunk with Titan Embeddings</p><p>Store vectors in OpenSearch Serverless</p></div></div>
+            <div class="sec"><span>02</span><div><b>Retrieve &amp; generate <em>0:15 – 0:31</em></b><p>Embed the question, fetch the nearest chunks</p><p>Add them to the prompt to ground the answer</p></div></div>
           </div>
         </div>
         <div class="stage s3">
           <div class="styles-row"><span class="chip on">Study outline</span><span class="chip">Q&amp;A</span><span class="chip">Condensed</span></div>
           <div class="qa">
-            <div><b>Where does glycolysis happen?</b><p>In the cytoplasm.</p></div>
-            <div><b>Does it need oxygen?</b><p>No. It's anaerobic.</p></div>
-            <div><b>What does it produce?</b><p>Two pyruvate molecules per glucose.</p></div>
+            <div><b>What does RAG add to a model?</b><p>Your own data, retrieved at question time.</p></div>
+            <div><b>Where do the embeddings live?</b><p>In a vector store such as OpenSearch Serverless.</p></div>
+            <div><b>Why fewer hallucinations?</b><p>Answers are grounded in the retrieved context.</p></div>
           </div>
           <div class="export-row"><span class="file pdf">PDF</span><span class="file html">HTML</span><span class="saved">Saved to exports/</span></div>
         </div>
@@ -198,7 +198,7 @@
     <article class="card c-search reveal">
       <div class="card-art search-art">
         <div class="search-box"><span class="mag"></span><span id="searchType"></span><span class="caret"></span></div>
-        <div class="result"><b>Cellular Respiration</b><p>…splits one glucose into two molecules of <mark>pyruvate</mark>.</p><small>Transcript · 0:09</small></div>
+        <div class="result"><b>RAG on Amazon Bedrock</b><p>…and turn each chunk into an <mark>embedding</mark>.</p><small>Transcript · 0:04</small></div>
       </div>
       <h3>Search everything</h3>
       <p>Titles, notes and transcripts. Jump straight to the line where it was said.</p>
@@ -237,7 +237,7 @@
       <p>Long transcripts are split to fit the model, summarized in parallel and merged into one set of notes.</p>
     </article>
     <article class="card c-export reveal">
-      <div class="card-art export-art"><div class="page p3"></div><div class="page p2"></div><div class="page p1"><b>How Cells Turn Glucose…</b><i></i><i></i><i class="s"></i><i></i></div></div>
+      <div class="card-art export-art"><div class="page p3"></div><div class="page p2"></div><div class="page p1"><b>Building RAG on Bedrock</b><i></i><i></i><i class="s"></i><i></i></div></div>
       <h3>PDF that looks designed</h3>
       <p>Export notes and the full transcript as a polished PDF or a standalone web page.</p>
     </article>

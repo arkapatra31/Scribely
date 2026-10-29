@@ -534,7 +534,9 @@ section { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
   .story-stage { height: 330px; top: 80px; }
   .stage { padding: 20px; }
   #wave { height: 170px; }
-  .stage-lines li { font-size: 0.9rem; grid-template-columns: 38px 1fr; gap: 10px; }
+  .stage-lines { gap: 10px; }
+  .stage-lines li { font-size: 0.86rem; grid-template-columns: 38px 1fr; gap: 10px; }
+  .stage-lines li:first-child { display: none; }
   .note-doc { padding: 16px; }
   .term { font-size: 0.78rem; padding: 20px; }
   .term-bar .tdots { display: none; }

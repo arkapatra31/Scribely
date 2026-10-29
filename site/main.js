@@ -39,12 +39,12 @@
 
   /* ---------- hero: the app demo ---------- */
   const LINES = [
-    [0, "Today we're looking at how cells turn glucose into usable energy."],
-    [4, "The first stage, glycolysis, happens in the cytoplasm."],
-    [9, "It doesn't need oxygen, and it splits one glucose into two pyruvate."],
-    [15, "Next, pyruvate moves into the mitochondria for the Krebs cycle."],
-    [21, "Each turn of the cycle releases carbon dioxide and energy carriers."],
-    [27, "Those carriers power the electron transport chain, which makes most ATP."],
+    [0, "Today we're building a retrieval-augmented generation pipeline on Amazon Bedrock."],
+    [4, "First, we split our documents into chunks and turn each chunk into an embedding."],
+    [9, "Those vectors go into a vector store, here OpenSearch Serverless."],
+    [15, "At query time we embed the question and retrieve the closest chunks."],
+    [21, "The retrieved context goes into the prompt, so the model answers from our data."],
+    [27, "That grounding keeps hallucinations down and answers up to date."],
   ];
   const transcript = $("#demoTranscript");
   const timerEl = $("#demoTimer");
@@ -216,7 +216,7 @@
   const searchArt = $(".search-art");
   const typed = $("#searchType");
   if (reduceMotion) {
-    typed.textContent = "pyruvate";
+    typed.textContent = "embedding";
     searchArt.classList.add("found");
   } else {
     (async function typeLoop() {
@@ -224,7 +224,7 @@
         searchArt.classList.remove("found");
         typed.textContent = "";
         await sleep(900);
-        for (const ch of "pyruvate") { typed.textContent += ch; await sleep(110); }
+        for (const ch of "embedding") { typed.textContent += ch; await sleep(110); }
         await sleep(250);
         searchArt.classList.add("found");
         await sleep(3200);
