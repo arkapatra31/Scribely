@@ -12,6 +12,7 @@ from scribely.config import ConfigError, load_settings
 from scribely.log import configure_logging
 from scribely.session import LiveSessionManager
 from scribely.session.store import SessionStore, StorageError
+from scribely.watchdog import start_from_env as watch_parent_from_env
 
 
 def main() -> None:
@@ -36,6 +37,7 @@ def main() -> None:
         llm_model=settings.llm.model,
         database=str(db_path),
     )
+    watch_parent_from_env()
     try:
         uvicorn.run(
             create_app(settings, LiveSessionManager(settings, store=store)),
