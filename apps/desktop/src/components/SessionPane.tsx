@@ -8,11 +8,11 @@ import type {
 } from "@scribely/schemas";
 import { NotesView } from "./NotesView";
 import { SessionHeader } from "./SessionHeader";
-import { SummarizeBar } from "./SummarizeBar";
+import { type Tab, Toolbar } from "./Toolbar";
 import { Transcript } from "./Transcript";
 
 interface Props {
-  session: Session | null;
+  session: Session;
   segments: TranscriptSegment[];
   partial: TranscriptPartialMessage | null;
   /** Showing the live/current session (vs. a saved one opened from the list). */
@@ -21,7 +21,6 @@ interface Props {
   notes: SessionNotes | undefined;
   job: NotesJobMessage | undefined;
   llmIssue: string | null;
-  emptyMessage: string;
   onRename: (title: string) => void;
   onSummarize: () => void;
   onOpenSettings: () => void;
@@ -31,8 +30,9 @@ interface Props {
 /** One session's main pane. Keyed by session id, so tab and scroll state reset per session. */
 export function SessionPane(props: Props) {
   const { session, segments, partial, live, recording, notes, job } = props;
-  const [tab, setTab] = useState<"notes" | "transcript">(notes ? "notes" : "transcript");
+  const [tab, setTab] = useState<Tab>(notes ? "notes" : "transcript");
   const [focusTime, setFocusTime] = useState<number | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
 
   // Fresh notes (e.g. after pressing Summarize) open the Notes tab.
   const hadNotes = useRef(notes !== undefined);
@@ -42,35 +42,32 @@ export function SessionPane(props: Props) {
   }, [notes]);
 
   const recordingThis = live && recording;
-  const canSummarize = session !== null && !recordingThis && segments.length > 0;
   const duration = segments.length ? segments[segments.length - 1].end : 0;
   const showNotes = notes !== undefined && tab === "notes";
 
   return (
-    <>
-      {session && (
-        <SessionHeader
-          session={session}
-          duration={duration}
-          live={live}
-          onRename={props.onRename}
-          onBackToLive={props.onBackToLive}
-        />
-      )}
-      {canSummarize && (
-        <SummarizeBar
-          hasNotes={notes !== undefined}
-          job={job}
-          llmIssue={props.llmIssue}
-          tab={tab}
-          onTab={(t) => {
-            setFocusTime(null);
-            setTab(t);
-          }}
-          onSummarize={props.onSummarize}
-          onOpenSettings={props.onOpenSettings}
-        />
-      )}
+    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto pb-32">
+      <SessionHeader
+        session={session}
+        duration={duration}
+        recording={recordingThis}
+        onRename={props.onRename}
+        onBackToLive={props.onBackToLive}
+      />
+      <div className="h-6" />
+      <Toolbar
+        tab={showNotes ? "notes" : "transcript"}
+        hasNotes={notes !== undefined}
+        canSummarize={!recordingThis && segments.length > 0}
+        job={job}
+        llmIssue={props.llmIssue}
+        onTab={(t) => {
+          setFocusTime(null);
+          setTab(t);
+        }}
+        onSummarize={props.onSummarize}
+        onOpenSettings={props.onOpenSettings}
+      />
       {showNotes ? (
         <NotesView
           notes={notes}
@@ -83,10 +80,16 @@ export function SessionPane(props: Props) {
         <Transcript
           segments={segments}
           partial={partial}
-          emptyMessage={props.emptyMessage}
+          listening={recordingThis}
+          emptyMessage={
+            recordingThis
+              ? "Listening… the transcript appears here as people speak."
+              : "Nothing was transcribed in this session."
+          }
           focusTime={focusTime}
+          scroller={scroller}
         />
       )}
-    </>
+    </div>
   );
 }

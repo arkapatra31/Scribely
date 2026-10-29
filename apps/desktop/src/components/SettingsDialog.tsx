@@ -1,15 +1,16 @@
 import { useEffect, useId, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { CircleCheck, Cloud, Cpu, LoaderCircle, TriangleAlert, X } from "lucide-react";
 import type { LlmSettings, LlmSettingsMessage, LlmTestMessage } from "@scribely/schemas";
 
 type Provider = LlmSettings["provider"];
 
-const PROVIDERS: { value: Provider; label: string; keyEnv?: string }[] = [
-  { value: "azure_openai", label: "Azure OpenAI", keyEnv: "AZURE_OPENAI_API_KEY" },
-  { value: "openai", label: "OpenAI", keyEnv: "OPENAI_API_KEY" },
-  { value: "anthropic", label: "Anthropic", keyEnv: "ANTHROPIC_API_KEY" },
-  { value: "gemini", label: "Google Gemini", keyEnv: "GOOGLE_API_KEY" },
-  { value: "ollama", label: "Ollama (local, no key)" },
+const PROVIDERS: { value: Provider; label: string; note: string; keyEnv?: string }[] = [
+  { value: "azure_openai", label: "Azure OpenAI", note: "Cloud", keyEnv: "AZURE_OPENAI_API_KEY" },
+  { value: "openai", label: "OpenAI", note: "Cloud", keyEnv: "OPENAI_API_KEY" },
+  { value: "anthropic", label: "Anthropic", note: "Cloud", keyEnv: "ANTHROPIC_API_KEY" },
+  { value: "gemini", label: "Gemini", note: "Cloud", keyEnv: "GOOGLE_API_KEY" },
+  { value: "ollama", label: "Ollama", note: "On this computer" },
 ];
 
 interface Props {
@@ -75,7 +76,7 @@ export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave,
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -85,42 +86,72 @@ export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave,
             role="dialog"
             aria-modal="true"
             aria-labelledby={`${ids}-title`}
-            initial={{ y: 12, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 12, opacity: 0 }}
-            className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-stone-900"
+            initial={{ y: 12, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="relative max-h-full w-full max-w-xl overflow-y-auto rounded-3xl border border-line bg-paper-raised p-7 shadow-float"
           >
-            <h2 id={`${ids}-title`} className="text-lg font-semibold">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close settings"
+              className="absolute right-5 top-5 rounded-full p-1.5 text-ink-faint transition hover:bg-paper-sunken hover:text-ink"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <h2 id={`${ids}-title`} className="font-serif text-2xl font-semibold tracking-tight">
               Notes model
             </h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-ink-muted">
               Used only when you press Summarize. Only the transcript text is sent.
             </p>
 
             {!form ? (
-              <p className="mt-6 text-sm text-stone-500">Loading…</p>
+              <p className="mt-6 flex items-center gap-2 text-sm text-ink-muted">
+                <LoaderCircle className="h-4 w-4 animate-spin" /> Loading…
+              </p>
             ) : (
               <form
-                className="mt-5 space-y-4"
+                className="mt-6 space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
                   save();
                 }}
               >
-                <Field label="Provider" htmlFor={`${ids}-provider`}>
-                  <select
-                    id={`${ids}-provider`}
-                    value={form.provider}
-                    onChange={(e) => changeProvider(e.target.value as Provider)}
-                    className={inputClass}
-                  >
-                    {PROVIDERS.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <fieldset>
+                  <legend className="mb-2 text-sm font-medium">Provider</legend>
+                  <div className="grid grid-cols-5 gap-2">
+                    {PROVIDERS.map((p) => {
+                      const active = form.provider === p.value;
+                      const Icon = p.keyEnv ? Cloud : Cpu;
+                      return (
+                        <button
+                          key={p.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => changeProvider(p.value)}
+                          className={`flex flex-col items-start gap-1.5 rounded-2xl border px-3 py-2.5 text-left transition ${
+                            active
+                              ? "border-accent bg-accent-soft shadow-soft"
+                              : "border-line hover:border-line-strong hover:bg-paper-sunken"
+                          }`}
+                        >
+                          <Icon
+                            className={`h-4 w-4 ${active ? "text-accent" : "text-ink-faint"}`}
+                            aria-hidden
+                          />
+                          <span>
+                            <span className="block text-[13px] font-medium leading-tight">
+                              {p.label}
+                            </span>
+                            <span className="block text-[11px] text-ink-muted">{p.note}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
 
                 <Field
                   label="Model"
@@ -217,7 +248,7 @@ export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave,
                         <button
                           type="button"
                           onClick={() => save(true)}
-                          className="shrink-0 rounded-lg px-3 text-sm text-stone-500 hover:text-red-600"
+                          className="shrink-0 rounded-xl px-3 text-sm text-ink-muted transition hover:bg-rec-soft hover:text-rec"
                         >
                           Forget
                         </button>
@@ -228,27 +259,28 @@ export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave,
 
                 <StatusLine dirty={dirty} llmIssue={llmIssue} test={test} />
 
-                <div className="flex items-center justify-end gap-2 pt-2">
+                <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
                   <button
                     type="button"
                     onClick={onTest}
                     disabled={dirty || test === "pending"}
                     title={dirty ? "Save first" : "Send one tiny request"}
-                    className="mr-auto rounded-full px-4 py-2 text-sm text-stone-600 hover:bg-stone-100 disabled:opacity-40 dark:text-stone-300 dark:hover:bg-stone-800"
+                    className="mr-auto inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm text-ink transition hover:bg-paper-sunken disabled:opacity-40"
                   >
+                    {test === "pending" && <LoaderCircle className="h-4 w-4 animate-spin" />}
                     {test === "pending" ? "Testing…" : "Test connection"}
                   </button>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-full px-4 py-2 text-sm text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+                    className="rounded-full px-4 py-2 text-sm text-ink-muted transition hover:bg-paper-sunken hover:text-ink"
                   >
                     {dirty ? "Cancel" : "Close"}
                   </button>
                   <button
                     type="submit"
                     disabled={!dirty}
-                    className="rounded-full bg-stone-900 px-5 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900"
+                    className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white shadow-soft transition hover:bg-accent-strong disabled:opacity-40 dark:text-paper"
                   >
                     Save
                   </button>
@@ -263,34 +295,42 @@ export function SettingsDialog({ open, message, llmIssue, test, onClose, onSave,
 }
 
 const inputClass =
-  "w-full rounded-lg border border-stone-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-stone-500 dark:border-stone-700";
+  "w-full rounded-xl border border-line-strong bg-paper px-3.5 py-2 text-sm outline-none transition placeholder:text-ink-faint focus:border-accent focus:ring-4 focus:ring-accent/10";
 
 function Field(props: { label: string; htmlFor: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label htmlFor={props.htmlFor} className="mb-1 block text-sm font-medium">
+      <label htmlFor={props.htmlFor} className="mb-1.5 block text-sm font-medium">
         {props.label}
       </label>
       {props.children}
-      {props.hint && <p className="mt-1 text-xs text-stone-500">{props.hint}</p>}
+      {props.hint && <p className="mt-1.5 text-xs text-ink-muted">{props.hint}</p>}
     </div>
   );
 }
 
 function StatusLine({ dirty, llmIssue, test }: Pick<Props, "llmIssue" | "test"> & { dirty: boolean }) {
+  const box = "flex items-start gap-2 rounded-xl px-3.5 py-2.5 text-sm";
   if (test && test !== "pending") {
-    return (
-      <p className={`text-sm ${test.ok ? "text-emerald-600" : "text-red-600"}`}>
-        {test.ok ? "✓ " : ""}
-        {test.message}
+    return test.ok ? (
+      <p className={`${box} bg-ok/10 text-ok`}>
+        <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" /> {test.message}
+      </p>
+    ) : (
+      <p className={`${box} bg-rec-soft text-rec`}>
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /> {test.message}
       </p>
     );
   }
-  if (dirty) return <p className="text-sm text-stone-500">Unsaved changes.</p>;
+  if (dirty) return <p className={`${box} bg-paper-sunken text-ink-muted`}>Unsaved changes.</p>;
   return llmIssue ? (
-    <p className="text-sm text-amber-700 dark:text-amber-400">{llmIssue}</p>
+    <p className={`${box} bg-warn-soft text-warn`}>
+      <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /> {llmIssue}
+    </p>
   ) : (
-    <p className="text-sm text-emerald-600">Ready to summarize.</p>
+    <p className={`${box} bg-ok/10 text-ok`}>
+      <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" /> Ready to summarize.
+    </p>
   );
 }
 
