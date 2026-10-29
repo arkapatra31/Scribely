@@ -84,6 +84,10 @@ class NoteDoc(Schema):
     sections: list[NoteSection] = Field(description="Note sections in chronological order.")
 
 
+RestructureStyle = Literal["outline", "qa", "condensed"]
+NotesStyle = Literal["standard", "outline", "qa", "condensed"]
+
+
 class SessionNotes(Schema):
     """Generated notes for a session, with what produced them."""
 
@@ -92,6 +96,8 @@ class SessionNotes(Schema):
     provider: str
     model: str
     created_at: datetime
+    style: NotesStyle = "standard"
+    edited: bool = Field(default=False, description="Changed by hand since generated.")
 
 
 # --- WebSocket protocol (/ws) ------------------------------------------------------------
@@ -109,6 +115,7 @@ ErrorCode = Literal[
     "session_busy",
     "storage_failed",
     "llm_failed",
+    "export_failed",
     "internal",
 ]
 NotesJobState = Literal["running", "done", "failed"]
@@ -206,6 +213,36 @@ class TestLlmCommand(Schema):
     type: Literal["test_llm"]
 
 
+class RestructureCommand(Schema):
+    """Client -> server: rewrite a session's current notes in another style (LLM, on request)."""
+
+    type: Literal["restructure"]
+    session_id: str
+    style: RestructureStyle
+
+
+class UpdateNotesCommand(Schema):
+    """Client -> server: save notes edited by hand."""
+
+    type: Literal["update_notes"]
+    session_id: str
+    doc: NoteDoc
+
+
+class ExportSessionCommand(Schema):
+    """Client -> server: write the session (notes + transcript) as a standalone HTML file."""
+
+    type: Literal["export_session"]
+    session_id: str
+
+
+class RevealExportCommand(Schema):
+    """Client -> server: show an exported file in Finder / Explorer."""
+
+    type: Literal["reveal_export"]
+    path: str
+
+
 class StatusMessage(Schema):
     """Server -> client: backend state; sent on connect and on every change."""
 
@@ -290,6 +327,15 @@ class LlmTestMessage(Schema):
     message: str
 
 
+class ExportedMessage(Schema):
+    """Server -> client: reply to export_session."""
+
+    type: Literal["exported"]
+    session_id: str
+    path: str
+    filename: str
+
+
 class ErrorMessage(Schema):
     """Server -> client: a plain-language problem to show the user."""
 
@@ -308,7 +354,11 @@ ClientMessage = Annotated[
     | SummarizeCommand
     | GetLlmSettingsCommand
     | SaveLlmSettingsCommand
-    | TestLlmCommand,
+    | TestLlmCommand
+    | RestructureCommand
+    | UpdateNotesCommand
+    | ExportSessionCommand
+    | RevealExportCommand,
     Field(discriminator="type"),
 ]
 ServerMessage = Annotated[
@@ -322,6 +372,7 @@ ServerMessage = Annotated[
     | NotesMessage
     | LlmSettingsMessage
     | LlmTestMessage
+    | ExportedMessage
     | ErrorMessage,
     Field(discriminator="type"),
 ]

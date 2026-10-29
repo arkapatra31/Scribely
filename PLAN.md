@@ -59,7 +59,7 @@ The hardest, most platform-specific piece — de-risk it early.
 
 ## Phase 5 · Desktop shell + live UI  ← first end-to-end slice
 
-- **5.1 Tauri shell** — native window, tray, and **launching/supervising the Python sidecar**.
+- **5.1 Tauri shell** — native window, tray, and **launching/supervising the Python sidecar**. ✅ launches the backend (bundled binary, or `uv run` in dev), reuses one already running, stops its process tree on quit; the backend exits on its own if the app dies (parent-pid watchdog). Tray pending.
 - **5.2 Live transcript view** — typed WS client; record/pause/stop controls; streaming transcript; recording indicator + timer. ✅ record/stop (pause later), live partials, offline/error banners.
   - D: 4.2 · DoD: **vertical slice works** — open app → record → watch live transcript stream from real captured audio → stop. (No notes yet.)
 
@@ -79,15 +79,15 @@ The hardest, most platform-specific piece — de-risk it early.
 ## Phase 7 · Notes UI
 
 - **7.1 Notes viewer** — render `NoteDoc` sections + timestamp chips that jump back to the video moment. ✅ Notes/Transcript tabs; timestamps jump to the transcript line (jumping the video itself needs a player integration).
-- **7.2 Actions** — Summarize / Restructure / Export buttons wired to the pipeline over WS; quiet toasts, loading states. Available on any stopped session opened from the list — summarizing is on demand, never automatic. ✅ Summarize / Summarize again with live progress; Restructure and Export pending.
-- **7.3 Editor** — light inline editing of generated notes.
+- **7.2 Actions** — Summarize / Restructure / Export buttons wired to the pipeline over WS; quiet toasts, loading states. Available on any stopped session opened from the list — summarizing is on demand, never automatic. ✅ Summarize / Summarize again with live progress; Restructure (outline / Q&A / condensed) and Export. ✅
+- **7.3 Editor** — light inline editing of generated notes. ✅ title, summary, headings, points; edits are kept and used by Restructure.
   - D: 5.2, 6.3 · DoD: stop a session → notes appear → user can summarize, restructure, and edit.
 
 ---
 
 ## Phase 8 · Export
 
-- **8.1 HTML export** — Jinja2 template → beautified, standalone, shareable HTML with working timestamp links.
+- **8.1 HTML export** — Jinja2 template → beautified, standalone, shareable HTML with working timestamp links. ✅ notes + full transcript, light/dark/print, no external assets, saved to `data/exports/` with Show in Finder.
 - **8.2 (Later) PDF** — WeasyPrint.
   - D: 7.1 · DoD: Export produces a self-contained HTML file that opens cleanly in any browser.
 

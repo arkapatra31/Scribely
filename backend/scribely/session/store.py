@@ -67,6 +67,10 @@ MIGRATIONS: list[str] = [
         value  TEXT NOT NULL
     );
     """,
+    """
+    ALTER TABLE notes ADD COLUMN style TEXT NOT NULL DEFAULT 'standard';
+    ALTER TABLE notes ADD COLUMN edited INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 
@@ -271,16 +275,18 @@ class SessionStore:
 
     def _save_notes_blocking(self, notes: SessionNotes) -> None:
         self._db.execute(
-            "INSERT INTO notes (session_id, doc, provider, model, created_at) "
-            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET doc = excluded.doc, "
-            "provider = excluded.provider, model = excluded.model, "
-            "created_at = excluded.created_at",
+            "INSERT INTO notes (session_id, doc, provider, model, created_at, style, edited) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET "
+            "doc = excluded.doc, provider = excluded.provider, model = excluded.model, "
+            "created_at = excluded.created_at, style = excluded.style, edited = excluded.edited",
             (
                 notes.session_id,
                 notes.doc.model_dump_json(),
                 notes.provider,
                 notes.model,
                 notes.created_at.isoformat(),
+                notes.style,
+                int(notes.edited),
             ),
         )
 
@@ -294,6 +300,8 @@ class SessionStore:
             provider=row["provider"],
             model=row["model"],
             created_at=datetime.fromisoformat(row["created_at"]),
+            style=row["style"],
+            edited=bool(row["edited"]),
         )
 
     def _get_blocking(self, session_id: str) -> tuple[Session, list[TranscriptSegment]] | None:

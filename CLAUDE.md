@@ -98,7 +98,7 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy .   # lint + 
 pnpm install
 pnpm gen:schemas                          # regenerate shared/schemas/models.ts from Pydantic
 pnpm typecheck                            # gen:schemas + tsc across workspace
-pnpm dev                                  # pnpm tauri dev for apps/desktop
+pnpm dev                                  # pnpm tauri dev; the app starts the backend itself (reuses one already on :8765)
 pnpm build                                # pnpm tauri build (installers)
 ```
 

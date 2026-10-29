@@ -1,4 +1,4 @@
-import type { LlmSettings } from "@scribely/schemas";
+import type { LlmSettings, NoteDoc, RestructureCommand } from "@scribely/schemas";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { initialState, reducer } from "./state";
 import { type ClientMessage, DEFAULT_WS_URL, ScribelyClient } from "./ws/client";
@@ -60,6 +60,21 @@ export function useScribely(url: string = DEFAULT_WS_URL) {
       dispatch({ kind: "llmTestPending" });
       send({ type: "test_llm" });
     }, [send]),
+    restructure: useCallback(
+      (session_id: string, style: RestructureCommand["style"]) =>
+        send({ type: "restructure", session_id, style }),
+      [send],
+    ),
+    updateNotes: useCallback(
+      (session_id: string, doc: NoteDoc) => send({ type: "update_notes", session_id, doc }),
+      [send],
+    ),
+    exportSession: useCallback(
+      (session_id: string) => send({ type: "export_session", session_id }),
+      [send],
+    ),
+    revealExport: useCallback((path: string) => send({ type: "reveal_export", path }), [send]),
+    dismissExported: useCallback(() => dispatch({ kind: "dismissExported" }), []),
     showLive: useCallback(() => dispatch({ kind: "showLive" }), []),
     dismissError: useCallback(() => dispatch({ kind: "dismissError" }), []),
   };

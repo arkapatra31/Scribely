@@ -1,5 +1,6 @@
 import type {
   ErrorMessage,
+  ExportedMessage,
   LlmSettingsMessage,
   LlmTestMessage,
   NotesJobMessage,
@@ -19,6 +20,8 @@ export type View =
 
 export interface AppState {
   connection: ConnectionState;
+  /** Whether the backend has been reached at least once since the app opened. */
+  everConnected: boolean;
   status: StatusMessage | null;
   /** Segments of the live/current session (the in-memory rolling window). */
   segments: TranscriptSegment[];
@@ -31,6 +34,7 @@ export interface AppState {
   jobs: Record<string, NotesJobMessage>;
   llmSettings: LlmSettingsMessage | null;
   llmTest: LlmTestMessage | "pending" | null;
+  exported: ExportedMessage | null;
   error: ErrorMessage | null;
 }
 
@@ -40,10 +44,12 @@ export type Action =
   | { kind: "showLive" }
   | { kind: "llmTestPending" }
   | { kind: "llmTestReset" }
+  | { kind: "dismissExported" }
   | { kind: "dismissError" };
 
 export const initialState: AppState = {
   connection: "connecting",
+  everConnected: false,
   status: null,
   segments: [],
   partial: null,
@@ -53,13 +59,20 @@ export const initialState: AppState = {
   jobs: {},
   llmSettings: null,
   llmTest: null,
+  exported: null,
   error: null,
 };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.kind) {
     case "connection":
-      return { ...state, connection: action.value };
+      return {
+        ...state,
+        connection: action.value,
+        everConnected: state.everConnected || action.value === "open",
+      };
+    case "dismissExported":
+      return { ...state, exported: null };
     case "dismissError":
       return { ...state, error: null };
     case "showLive":
@@ -124,6 +137,8 @@ function applyMessage(state: AppState, message: ServerMessage): AppState {
       return { ...state, llmSettings: message };
     case "llm_test":
       return { ...state, llmTest: message };
+    case "exported":
+      return { ...state, exported: message };
     case "error":
       return { ...state, error: message };
   }
