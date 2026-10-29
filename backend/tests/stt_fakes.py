@@ -6,7 +6,8 @@ import numpy as np
 
 from scribely.capture.dsp import TARGET_SAMPLE_RATE as SR
 from scribely.capture.dsp import Float32Array
-from scribely.stt.transcriber import TimedText
+from scribely.config import SttConfig
+from scribely.stt.transcriber import LoadProgress, TimedText
 
 
 class EnergyVAD:
@@ -59,8 +60,14 @@ class LoadableFakeTranscriber(FakeTranscriber):
         super().__init__()
         self.load_error = load_error
         self.loads = 0
+        self.configs: list[SttConfig] = []
 
-    def load(self) -> None:
+    def load(self, on_progress: LoadProgress | None = None) -> None:
         self.loads += 1
+        if on_progress is not None:
+            on_progress("loading", None)
         if self.load_error is not None:
             raise self.load_error
+
+    def configure(self, cfg: SttConfig) -> None:
+        self.configs.append(cfg)

@@ -71,6 +71,11 @@ class StreamingTranscriber:
         unchecked = 0
         step = int(VAD_STEP_SECONDS * SR)
         async for chunk in chunks:
+            if chunk.boundary:
+                async for u in self._flush():
+                    yield u
+                unchecked = 0
+                continue
             if len(self._buf) and chunk.start - self._buf_end > GAP_TOLERANCE_SECONDS:
                 async for u in self._flush():
                     yield u

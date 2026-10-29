@@ -145,6 +145,7 @@ class PathsConfig(_Section):
     data_dir: Path | None = None
     exports_dir: Path | None = None
     models_dir: Path | None = None
+    logs_dir: Path | None = None
 
     def resolved_data_dir(self) -> Path:
         if self.data_dir is not None:
@@ -162,10 +163,17 @@ class PathsConfig(_Section):
             return _resolve(self.models_dir)
         return self.resolved_data_dir() / "models"
 
+    def resolved_logs_dir(self) -> Path:
+        if self.logs_dir is not None:
+            return _resolve(self.logs_dir)
+        return self.resolved_data_dir() / "logs"
+
 
 class LoggingConfig(_Section):
     level: LogLevel = "INFO"
     format: Literal["console", "json"] = "console"
+    # Also write logs/scribely.log in the data folder (rotated at 1 MB, 3 kept). Stays local.
+    file: bool = True
 
 
 class Settings(BaseSettings):

@@ -9,17 +9,25 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 
 from scribely.models import (
+    CapturePermissionCommand,
     ClientMessage,
     DeleteSessionCommand,
     ErrorMessage,
     ExportSessionCommand,
+    FinishOnboardingCommand,
+    GetDiagnosticsCommand,
     GetLlmSettingsCommand,
+    GetSpeechSettingsCommand,
     ListSessionsCommand,
     OpenSessionCommand,
+    PauseCommand,
     RenameSessionCommand,
     RestructureCommand,
+    ResumeCommand,
     RevealExportCommand,
     SaveLlmSettingsCommand,
+    SaveSpeechSettingsCommand,
+    SearchSessionsCommand,
     ServerMessage,
     StartCommand,
     StopCommand,
@@ -78,6 +86,10 @@ async def _handle(
                 await manager.start(command.title)
             case StopCommand():
                 await manager.stop()
+            case PauseCommand():
+                await manager.pause()
+            case ResumeCommand():
+                await manager.resume()
             case ListSessionsCommand():
                 queue.put_nowait(await manager.sessions_message())
             case OpenSessionCommand():
@@ -99,9 +111,21 @@ async def _handle(
             case UpdateNotesCommand():
                 await manager.update_notes(command.session_id, command.doc)
             case ExportSessionCommand():
-                queue.put_nowait(await manager.export_session(command.session_id))
+                queue.put_nowait(await manager.export_session(command.session_id, command.format))
             case RevealExportCommand():
                 await manager.reveal_export(command.path)
+            case GetSpeechSettingsCommand():
+                queue.put_nowait(await manager.speech_settings_message())
+            case SaveSpeechSettingsCommand():
+                await manager.save_speech_settings(command.settings)
+            case SearchSessionsCommand():
+                queue.put_nowait(await manager.search(command.query))
+            case CapturePermissionCommand():
+                queue.put_nowait(await manager.capture_permission(command.action))
+            case FinishOnboardingCommand():
+                await manager.finish_onboarding()
+            case GetDiagnosticsCommand():
+                queue.put_nowait(await manager.diagnostics())
     except SessionError as err:
         queue.put_nowait(ErrorMessage(type="error", code=err.code, message=err.message))
 

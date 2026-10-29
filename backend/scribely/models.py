@@ -103,7 +103,7 @@ class SessionNotes(Schema):
 # --- WebSocket protocol (/ws) ------------------------------------------------------------
 # Every message is a JSON object with a "type" discriminator.
 
-BackendState = Literal["idle", "loading_model", "recording", "stopping"]
+BackendState = Literal["idle", "loading_model", "recording", "paused", "stopping"]
 ErrorCode = Literal[
     "capture_permission",
     "capture_failed",
@@ -119,6 +119,10 @@ ErrorCode = Literal[
     "internal",
 ]
 NotesJobState = Literal["running", "done", "failed"]
+SpeechModelState = Literal["downloading", "loading", "ready", "failed"]
+CapturePermissionState = Literal["granted", "denied", "not_needed", "unknown"]
+ExportFormat = Literal["html", "pdf"]
+SearchField = Literal["title", "transcript", "notes"]
 # Where the API key for a provider comes from. Keys are never stored: "session" means
 # entered in Settings since the backend started (memory only).
 KeySource = Literal["session", "env", "missing", "not_needed"]
@@ -135,6 +139,16 @@ class StopCommand(Schema):
     """Client -> server: stop the current session."""
 
     type: Literal["stop"]
+
+
+class PauseCommand(Schema):
+    """Client -> server: pause the recording; nothing is captured until resume."""
+
+    type: Literal["pause"]
+
+
+class ResumeCommand(Schema):
+    type: Literal["resume"]
 
 
 class ListSessionsCommand(Schema):
@@ -230,10 +244,12 @@ class UpdateNotesCommand(Schema):
 
 
 class ExportSessionCommand(Schema):
-    """Client -> server: write the session (notes + transcript) as a standalone HTML file."""
+    """Client -> server: write the session (notes + transcript) as a standalone HTML or PDF
+    file."""
 
     type: Literal["export_session"]
     session_id: str
+    format: ExportFormat = "html"
 
 
 class RevealExportCommand(Schema):
@@ -241,6 +257,64 @@ class RevealExportCommand(Schema):
 
     type: Literal["reveal_export"]
     path: str
+
+
+class SpeechSettings(Schema):
+    """Speech-to-text settings edited in the app (saved; override config.toml)."""
+
+    model: str = Field(min_length=1, max_length=500)
+    language: str | None = Field(
+        default=None, description="Whisper language code such as 'en'; None auto-detects."
+    )
+
+    @field_validator("model")
+    @classmethod
+    def _strip_model(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("language")
+    @classmethod
+    def _known_language(cls, value: str | None) -> str | None:
+        from scribely.stt.catalog import LANGUAGES
+
+        if value is not None and value not in LANGUAGES:
+            raise ValueError(f"Unknown language code {value!r}.")
+        return value
+
+
+class GetSpeechSettingsCommand(Schema):
+    type: Literal["get_speech_settings"]
+
+
+class SaveSpeechSettingsCommand(Schema):
+    """Client -> server: save speech settings; a new model is downloaded/loaded right away."""
+
+    type: Literal["save_speech_settings"]
+    settings: SpeechSettings
+
+
+class SearchSessionsCommand(Schema):
+    """Client -> server: find sessions whose title, transcript or notes contain ``query``."""
+
+    type: Literal["search_sessions"]
+    query: str = Field(max_length=200)
+
+
+class CapturePermissionCommand(Schema):
+    """Client -> server: check (or ask for) the OS permission system-audio capture needs."""
+
+    type: Literal["capture_permission"]
+    action: Literal["check", "request", "open_settings"]
+
+
+class FinishOnboardingCommand(Schema):
+    type: Literal["finish_onboarding"]
+
+
+class GetDiagnosticsCommand(Schema):
+    """Client -> server: a plain-text report for troubleshooting (no keys, no transcripts)."""
+
+    type: Literal["get_diagnostics"]
 
 
 class StatusMessage(Schema):
@@ -253,6 +327,10 @@ class StatusMessage(Schema):
     llm_issue: str | None = Field(
         default=None, description="Why notes can't be generated right now, if known."
     )
+    elapsed: float = Field(
+        default=0.0, ge=0, description="Seconds recorded so far (pauses excluded), as of now."
+    )
+    onboarded: bool = Field(default=True, description="False until first-run setup is done.")
 
 
 class TranscriptSnapshot(Schema):
@@ -336,6 +414,73 @@ class ExportedMessage(Schema):
     filename: str
 
 
+class SpeechModelOption(Schema):
+    name: str
+    label: str
+    size_mb: int
+    description: str
+    english_only: bool
+    downloaded: bool
+
+
+class LanguageOption(Schema):
+    code: str
+    name: str
+
+
+class SpeechSettingsMessage(Schema):
+    """Server -> client: speech settings plus the models and languages to choose from."""
+
+    type: Literal["speech_settings"]
+    settings: SpeechSettings
+    models: list[SpeechModelOption]
+    languages: list[LanguageOption]
+
+
+class SpeechModelMessage(Schema):
+    """Server -> client: the speech model being downloaded/loaded (broadcast)."""
+
+    type: Literal["speech_model"]
+    model: str
+    state: SpeechModelState
+    progress: float | None = Field(default=None, ge=0, le=1, description="Download progress.")
+    message: str
+
+
+class AudioLevelMessage(Schema):
+    """Server -> client: loudness of the captured audio, about 10 times a second."""
+
+    type: Literal["audio_level"]
+    level: float = Field(ge=0, le=1, description="0 = silence, 1 = very loud.")
+
+
+class SearchHit(Schema):
+    session_id: str
+    field: SearchField
+    snippet: str = Field(description="Text around the first match.")
+    start: float | None = Field(default=None, description="Transcript offset of the match.")
+
+
+class SearchResultsMessage(Schema):
+    """Server -> client: reply to search_sessions; at most one hit per session, newest first."""
+
+    type: Literal["search_results"]
+    query: str
+    hits: list[SearchHit]
+
+
+class CapturePermissionMessage(Schema):
+    type: Literal["capture_permission"]
+    state: CapturePermissionState
+    message: str
+
+
+class DiagnosticsMessage(Schema):
+    type: Literal["diagnostics"]
+    text: str
+    log_path: str | None = None
+
+
 class ErrorMessage(Schema):
     """Server -> client: a plain-language problem to show the user."""
 
@@ -347,6 +492,8 @@ class ErrorMessage(Schema):
 ClientMessage = Annotated[
     StartCommand
     | StopCommand
+    | PauseCommand
+    | ResumeCommand
     | ListSessionsCommand
     | OpenSessionCommand
     | RenameSessionCommand
@@ -358,7 +505,13 @@ ClientMessage = Annotated[
     | RestructureCommand
     | UpdateNotesCommand
     | ExportSessionCommand
-    | RevealExportCommand,
+    | RevealExportCommand
+    | GetSpeechSettingsCommand
+    | SaveSpeechSettingsCommand
+    | SearchSessionsCommand
+    | CapturePermissionCommand
+    | FinishOnboardingCommand
+    | GetDiagnosticsCommand,
     Field(discriminator="type"),
 ]
 ServerMessage = Annotated[
@@ -373,6 +526,12 @@ ServerMessage = Annotated[
     | LlmSettingsMessage
     | LlmTestMessage
     | ExportedMessage
+    | SpeechSettingsMessage
+    | SpeechModelMessage
+    | AudioLevelMessage
+    | SearchResultsMessage
+    | CapturePermissionMessage
+    | DiagnosticsMessage
     | ErrorMessage,
     Field(discriminator="type"),
 ]

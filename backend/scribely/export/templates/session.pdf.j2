@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="generator" content="Scribely {{ version }}">
+<title>{{ title }}</title>
+<style>
+  /* Mirrors the app's Notes view: same fonts (bundled), light-theme tokens and layout. */
+  @font-face {
+    font-family: "Inter Variable"; font-weight: 100 900;
+    src: url("inter-latin-wght-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+      U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+      U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Inter Variable"; font-weight: 100 900;
+    src: url("inter-latin-ext-wght-normal.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+      U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+      U+2C60-2C7F, U+A720-A7FF;
+  }
+  @font-face {
+    font-family: "Newsreader Variable"; font-weight: 200 800;
+    src: url("newsreader-latin-wght-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+      U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+      U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Newsreader Variable"; font-weight: 200 800;
+    src: url("newsreader-latin-ext-wght-normal.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+      U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+      U+2C60-2C7F, U+A720-A7FF;
+  }
+
+  @page {
+    size: A4;
+    margin: 22mm 20mm 20mm;
+    background: #faf8f4;
+    @bottom-left {
+      content: string(doctitle);
+      font: 8pt "Inter Variable", sans-serif; color: #a39d93;
+    }
+    @bottom-right {
+      content: counter(page) " / " counter(pages);
+      font: 8pt "Inter Variable", sans-serif; color: #a39d93;
+    }
+  }
+  @page :first { @bottom-left { content: none; } }
+
+  * { box-sizing: border-box; }
+  html {
+    color: #1d1c1a;
+    font: 10.5pt/1.7 "Inter Variable", -apple-system, "Segoe UI", sans-serif;
+  }
+  body { margin: 0; }
+  .serif, h1, h2, h3 { font-family: "Newsreader Variable", Georgia, serif; }
+
+  .brand {
+    font: 600 8pt "Inter Variable", sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #4f46e5; margin: 0 0 18pt;
+  }
+  h1 {
+    string-set: doctitle content();
+    font-size: 24pt; font-weight: 600; line-height: 1.2; letter-spacing: -0.015em;
+    margin: 0 0 8pt;
+  }
+  .meta { color: #6b665e; font-size: 9pt; }
+  .meta span + span::before { content: "·"; color: #a39d93; margin: 0 7pt; }
+  .tag {
+    display: inline-block; font-size: 8pt; font-weight: 500; padding: 1pt 8pt;
+    border-radius: 999pt; background: #eef0ff; color: #3730a3;
+  }
+  .meta .tag::before { content: none; }
+  .meta .tag { margin-left: 8pt; }
+
+  .summary {
+    margin-top: 20pt; padding: 14pt 18pt; border-radius: 12pt;
+    background: #f3f3fd; border: 0.75pt solid #dedcf7;
+  }
+  .label {
+    font-size: 7.5pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #3730a3; margin: 0 0 4pt;
+  }
+  .summary p:last-child { margin: 0; font-size: 12pt; line-height: 1.6; }
+
+  section.note {
+    display: flex; gap: 10pt; margin-top: 22pt; break-inside: avoid-page;
+  }
+  .num {
+    width: 26pt; flex: none; padding-top: 3pt;
+    font: 8.5pt ui-monospace, Menlo, Consolas, monospace; color: #a39d93;
+  }
+  .body { flex: 1; min-width: 0; }
+  h3 {
+    display: inline; font-size: 14pt; font-weight: 600; letter-spacing: -0.01em; margin: 0;
+  }
+  .time {
+    display: inline-block; margin-left: 8pt; vertical-align: 2pt;
+    font: 7.5pt ui-monospace, Menlo, Consolas, monospace; color: #6b665e;
+    border: 0.75pt solid #e6e1d7; border-radius: 999pt; padding: 0 6pt;
+    text-decoration: none;
+  }
+  ul { margin: 7pt 0 0; padding: 0; list-style: none; }
+  ul li { position: relative; padding-left: 16pt; margin: 4pt 0; }
+  ul li::before {
+    content: ""; position: absolute; left: 2pt; top: 0.62em; width: 4.5pt; height: 4.5pt;
+    border-radius: 50%; background: #958fef;
+  }
+
+  .transcript-head {
+    margin: 30pt 0 8pt; padding-top: 12pt; border-top: 0.75pt solid #e6e1d7;
+    font-size: 14pt; font-weight: 600;
+  }
+  {% if notes %}.transcript-head { break-before: page; border-top: 0; padding-top: 0; margin-top: 0; }{% endif %}
+  ol.transcript { list-style: none; padding: 0; margin: 0; }
+  ol.transcript li { display: flex; gap: 10pt; padding: 2pt 0; break-inside: avoid; }
+  ol.transcript .t {
+    width: 34pt; flex: none; text-align: right; padding-top: 2pt;
+    font: 7.5pt ui-monospace, Menlo, Consolas, monospace; color: #a39d93;
+  }
+  footer {
+    margin-top: 30pt; padding-top: 10pt; border-top: 0.75pt solid #e6e1d7;
+    color: #a39d93; font-size: 8pt;
+  }
+</style>
+</head>
+<body>
+  <p class="brand">Scribely</p>
+  <h1>{{ title }}</h1>
+  <div class="meta">
+    {% if notes %}<span>{{ session_title }}</span>{% endif %}
+    <span>{{ started.strftime("%A, %d %B %Y · %H:%M") }}</span>
+    <span>{{ duration }}</span>
+    {% if style %}<span class="tag">{{ style }}</span>{% endif %}
+  </div>
+
+  {% if notes %}
+  <div class="summary">
+    <p class="label">Summary</p>
+    <p class="serif">{{ notes.doc.summary }}</p>
+  </div>
+
+  {% for section in notes.doc.sections %}
+  <section class="note">
+    <span class="num">{{ "%02d" | format(loop.index) }}</span>
+    <div class="body">
+      <h3>{{ section.heading }}</h3>
+      {% set first = segments | selectattr("end", "ge", section.start) | first %}
+      {% if first %}
+      <a class="time" href="#t{{ first.index }}">{{ section.start | clock }} – {{ section.end | clock }}</a>
+      {% else %}
+      <span class="time">{{ section.start | clock }} – {{ section.end | clock }}</span>
+      {% endif %}
+      <ul>
+        {% for point in section.points %}<li>{{ point }}</li>{% endfor %}
+      </ul>
+    </div>
+  </section>
+  {% endfor %}
+
+  <footer>
+    Written by {{ provider }} · {{ notes.model }}{% if notes.edited %} · edited by you{% endif %}
+    · Exported from Scribely on {{ exported.strftime("%d %B %Y, %H:%M") }}
+  </footer>
+  {% endif %}
+
+  {% if segments %}
+  <h2 class="transcript-head">Full transcript</h2>
+  <ol class="transcript">
+    {% for s in segments %}
+    <li id="t{{ s.index }}"><span class="t">{{ s.start | clock }}</span><span>{{ s.text }}</span></li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+
+  {% if not notes %}
+  <footer>Exported from Scribely on {{ exported.strftime("%d %B %Y, %H:%M") }}</footer>
+  {% endif %}
+</body>
+</html>
