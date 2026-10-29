@@ -62,7 +62,6 @@ Scribely/                 # repo root
   config.toml.example     # documented defaults; copy to config.toml at the root (gitignored)
   package.json            # pnpm workspace root (gen:schemas, dev, build)
   CLAUDE.md
-  PLAN.md
 ```
 
 ## Conventions
