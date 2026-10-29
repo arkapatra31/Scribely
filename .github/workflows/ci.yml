@@ -40,7 +40,7 @@ jobs:
           # WeasyPrint finds Homebrew's Pango on Apple Silicon only via this path. Exported
           # here because macOS strips DYLD_* variables passed to /bin/bash itself.
           if [ "$RUNNER_OS" = macOS ]; then export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib; fi
-          uv run pytest -q
+          uv run pytest -q -rs
 
   frontend:
     name: Frontend
