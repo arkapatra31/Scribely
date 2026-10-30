@@ -26,7 +26,7 @@ dependencies = [
     "langchain-ollama>=1.1.0",
     "httpx>=0.28.1",
     "jinja2>=3.1.6",
-    "weasyprint>=70.0",
+    "reportlab>=5.1.0",
 ]
 
 [project.scripts]
@@ -41,6 +41,7 @@ dev = [
     "pydantic-to-typescript>=2.0",
     "pytest>=8.3",
     "ruff>=0.8",
+    "types-reportlab>=5.0.0.20261008",
 ]
 
 [build-system]
@@ -63,7 +64,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # Platform-only (PyAudioWPatch on Windows, PyObjC on macOS) or untyped packages.
-module = ["weasyprint", "weasyprint.*", "pyaudiowpatch", "objc", "Foundation", "CoreMedia", "Quartz", "ScreenCaptureKit", "dispatch", "soxr", "faster_whisper", "faster_whisper.*"]
+module = ["pyaudiowpatch", "objc", "Foundation", "CoreMedia", "Quartz", "ScreenCaptureKit", "dispatch", "soxr", "faster_whisper", "faster_whisper.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

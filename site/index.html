@@ -328,7 +328,7 @@
     <div class="pnode"><span>02</span><b>Transcribe</b><small>faster-whisper<br>+ Silero VAD</small></div>
     <div class="pnode"><span>03</span><b>Session</b><small>rolling window<br>→ SQLite (WAL)</small></div>
     <div class="pnode"><span>04</span><b>Notes</b><small>LangGraph map-reduce<br>any LLM provider</small></div>
-    <div class="pnode"><span>05</span><b>Export</b><small>Jinja2 → HTML<br>WeasyPrint → PDF</small></div>
+    <div class="pnode"><span>05</span><b>Export</b><small>Jinja2 → HTML<br>ReportLab → PDF</small></div>
   </div>
   <p class="pipe-note reveal">A Tauri shell in Rust, a React interface and a Python sidecar talking over one local WebSocket. <a href="https://github.com/arkapatra31/Scribely#architecture">Read the architecture →</a></p>
 </section>
@@ -349,7 +349,7 @@
       </div>
       <button class="copy" type="button" aria-label="Copy commands">Copy</button>
     </div>
-<pre class="term" data-os="mac"><code><span class="c"># one-time: brew install git uv node@22 pango &amp;&amp; npm i -g pnpm@10 (+ Rust)</span>
+<pre class="term" data-os="mac"><code><span class="c"># one-time: brew install git uv node@22 &amp;&amp; npm i -g pnpm@10 (+ Rust)</span>
 <span class="p">$</span> git clone https://github.com/arkapatra31/Scribely.git &amp;&amp; cd Scribely
 <span class="p">$</span> cd backend &amp;&amp; uv sync &amp;&amp; cd ..
 <span class="p">$</span> pnpm install

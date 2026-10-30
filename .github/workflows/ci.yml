@@ -27,20 +27,11 @@ jobs:
           version: "0.11.32"
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-      - name: Install Pango for PDF export (macOS)
-        if: runner.os == 'macOS'
-        run: brew install pango
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy .
-      - name: uv run pytest
-        shell: bash
-        run: |
-          # WeasyPrint finds Homebrew's Pango on Apple Silicon only via this path. Exported
-          # here because macOS strips DYLD_* variables passed to /bin/bash itself.
-          if [ "$RUNNER_OS" = macOS ]; then export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib; fi
-          uv run pytest -q -rs
+      - run: uv run pytest -q -rs
 
   frontend:
     name: Frontend

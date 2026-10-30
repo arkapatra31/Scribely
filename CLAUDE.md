@@ -31,7 +31,7 @@ These shape the whole design. Do not violate them without explicit instruction.
 | Session state | SQLite (WAL mode) + in-memory rolling window for live display |
 | Notes pipeline | LangGraph + LangChain provider packages (`langchain-openai`, `langchain-anthropic`, `langchain-google-genai`, `langchain-ollama`) + Pydantic structured output |
 | Model runtime | **Azure OpenAI** (default, `gpt-4o`); `anthropic` (`langchain-anthropic`), `openai`, `gemini` (`langchain-google-genai`), and Ollama (`langchain-ollama`) supported via config |
-| Export | Jinja2 → HTML (WeasyPrint → PDF later) |
+| Export | Jinja2 → HTML · ReportLab → PDF (pure pip dependency; no system libraries such as Pango) |
 | Persistence | SQLite (WAL) + filesystem, via `platformdirs` |
 | Config | TOML via `pydantic-settings` |
 | Packaging | PyInstaller / Briefcase (Python sidecar) bundled in the Tauri app; code signing + notarization |
@@ -101,7 +101,7 @@ pnpm gen:schemas                          # regenerate shared/schemas/models.ts 
 pnpm typecheck                            # gen:schemas + tsc across workspace
 pnpm dev                                  # pnpm tauri dev; the app starts the backend itself (reuses one already on :8765)
 pnpm build                                # pnpm tauri build (installers)
-# PDF export needs Pango: brew install pango (macOS). CI (.github/workflows/ci.yml) runs the
+# CI (.github/workflows/ci.yml) runs the
 # backend checks on macOS/Windows/Linux, the frontend build, and cargo fmt/clippy/test.
 ```
 

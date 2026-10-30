@@ -328,11 +328,6 @@ def test_store_search_titles_notes_transcripts(tmp_path: Path) -> None:
 
 
 def test_export_pdf(tmp_path: Path) -> None:
-    try:
-        import weasyprint  # noqa: F401
-    except OSError:  # Pango isn't installed (e.g. a Windows CI runner)
-        pytest.skip("WeasyPrint's native libraries aren't installed")
-
     async def run() -> Path:
         m = manager(tmp_path)
         session = await m.start("Bio")
@@ -342,6 +337,32 @@ def test_export_pdf(tmp_path: Path) -> None:
 
     path = asyncio.run(run())
     assert path.suffix == ".pdf" and path.read_bytes().startswith(b"%PDF")
+
+
+def test_pdf_text_is_escaped_and_falls_back_for_missing_glyphs() -> None:
+    from scribely.export.pdf import SANS, _fonts, _FontSet
+
+    _fonts()  # registers the bundled fonts
+    no_system_fonts = _FontSet([])
+    assert no_system_fonts.markup("Q&A <tags> café", SANS) == "Q&amp;A &lt;tags&gt; café"
+    # CJK isn't in Inter: with no system font it uses ReportLab's built-in CJK font.
+    assert no_system_fonts.markup("RAG 检索", SANS) == 'RAG <font name="STSong-Light">检索</font>'
+
+
+def test_pdf_renders_any_script_without_system_libraries(tmp_path: Path) -> None:
+    from datetime import UTC, datetime
+
+    from scribely.export import render_session_pdf
+
+    session = Session(
+        id="s", title="Ελληνικά · 中文", status="stopped", started_at=datetime.now(UTC)
+    )
+    segments = [
+        TranscriptSegment(session_id="s", index=i, start=i, end=i + 1, text=text)
+        for i, text in enumerate(["Hello & <welcome>", "Привет", "검색 증강 생성", "مرحبا"])
+    ]
+    pdf = render_session_pdf(session, segments, None)
+    assert pdf.startswith(b"%PDF") and b"/Title" in pdf
 
 
 def test_log_file_and_diagnostics_never_include_keys(tmp_path: Path) -> None:

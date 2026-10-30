@@ -25,15 +25,6 @@ winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--wait
 
 **WebView2** (the engine the app window uses) is already part of Windows 10 and 11. If the window later stays blank, install it with `winget install --id Microsoft.EdgeWebView2Runtime -e`.
 
-**Pango for PDF export** (optional; everything else works without it). Install MSYS2, then Pango inside it:
-
-```powershell
-winget install --id MSYS2.MSYS2 -e
-C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango"
-```
-
-Scribely's PDF library looks in `C:\msys64\ucrt64\bin` automatically.
-
 **Close PowerShell and open a new one** so the new tools are on your PATH. Then install pnpm and check everything:
 
 ```powershell
@@ -154,7 +145,7 @@ Type in the **Search sessions** box above the sidebar list. Scribely searches ti
 
 Press **Export** and choose:
 
-- **PDF document**: styled like the app, with page numbers; the full transcript follows on its own pages. Needs Pango (step 1).
+- **PDF document**: styled like the app, with page numbers; the full transcript follows on its own pages.
 - **Web page**: a single HTML file that opens in any browser, light or dark, with links from the notes to the transcript.
 
 Files are saved to `data\exports\`. Press **Show in Explorer** in the confirmation banner to open the folder.
@@ -192,6 +183,5 @@ pnpm dev
 | Speech model download fails | Check your internet connection and press **Retry** in Settings → Speech. |
 | Summarize says the API key is missing | Keys are forgotten when Scribely quits; paste it again in Settings → Notes model. |
 | Ollama model not found | Run `ollama pull <model>` and pick it in Settings. |
-| PDF export says Pango is missing | Install MSYS2 and Pango as in step 1, then restart Scribely. |
 | The shortcut does nothing | Another app may own Ctrl+Shift+Alt+R; the PowerShell output says so at start. Use the Record button or the tray menu. |
 | Can't find Scribely after closing the window | It's in the system tray, possibly under the **^** arrow. |
