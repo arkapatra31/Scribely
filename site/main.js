@@ -142,9 +142,11 @@
     let userPaused = false;
 
     const play = () => video.play().catch(() => {});
+    let setMuted = () => {};
     video.addEventListener("play", () => player.classList.add("playing"));
     video.addEventListener("pause", () => player.classList.remove("playing"));
-    playBtn.addEventListener("click", () => { userPaused = false; play(); });
+    // Autoplay has to be muted; a click on the big play button is allowed to start with sound.
+    playBtn.addEventListener("click", () => { userPaused = false; setMuted(false); play(); });
     video.addEventListener("click", () => {
       if (video.paused) { userPaused = false; play(); } else { userPaused = true; video.pause(); }
     });
@@ -162,16 +164,14 @@
       const end = starts[i + 1] ?? video.duration ?? t;
       chapterBtns.forEach((b, j) => b.classList.toggle("on", j === i));
       chapterBtns[i].style.setProperty("--p", `${Math.min(100, ((t - starts[i]) / Math.max(0.1, end - starts[i])) * 100)}%`);
-      // Offer sound only if this recording actually has an audio track.
-      if (soundBtn.hidden && t > 0.5 && (video.webkitAudioDecodedByteCount > 0 || video.mozHasAudio || video.audioTracks?.length)) {
-        soundBtn.hidden = false;
-      }
     });
-    soundBtn.addEventListener("click", () => {
-      video.muted = !video.muted;
-      soundBtn.setAttribute("aria-pressed", String(!video.muted));
-      soundBtn.textContent = video.muted ? "Sound on" : "Mute";
-    });
+    setMuted = (muted) => {
+      video.muted = muted;
+      soundBtn.setAttribute("aria-pressed", String(!muted));
+      soundBtn.classList.toggle("on", !muted);
+      soundBtn.innerHTML = muted ? '<span aria-hidden="true">🔊</span> Sound on' : '<span aria-hidden="true">🔇</span> Mute';
+    };
+    soundBtn.addEventListener("click", () => setMuted(!video.muted));
 
     if (!reduceMotion) {
       new IntersectionObserver(([e]) => {

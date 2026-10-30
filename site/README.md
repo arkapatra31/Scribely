@@ -7,7 +7,7 @@ Static site for GitHub Pages: `index.html`, `styles.css`, `main.js`, bundled fon
 
 ## Demo video
 
-The "See it in action" section plays `media/scribely-demo.mp4`, with `media/scribely-demo-poster.jpg` as the still shown before it plays. The current clip was recorded from the real interface with demo content and has no sound. To replace it with a real recording (a real lecture, real transcription, real notes, with sound):
+The "See it in action" section plays `media/scribely-demo.mp4`, with `media/scribely-demo-poster.jpg` as the still shown before it plays. The current clip was recorded from the real interface. Its sound is the lecture Scribely hears, a synthetic voice (espeak-ng with an MBROLA voice) synced to the moment Record is pressed; the transcript and notes are demo content. To replace it with a real recording (a real lecture, real transcription, real notes, with sound):
 
 ### 1. Record on your Mac
 
@@ -47,4 +47,4 @@ In `index.html`, in the `#demo` section:
 - set each chapter's `data-t` to the second where that step starts in your video;
 - change the caption under the player (it currently says the content is a demo).
 
-The **Sound on** button appears automatically when the video has an audio track; the video still starts muted, because browsers only allow muted autoplay.
+Browsers only allow muted autoplay, so the video starts muted when it scrolls into view. The **Sound on** button unmutes it, and the big play button starts it with sound. If you ever use a clip without audio, remove the `#demoSound` button.
