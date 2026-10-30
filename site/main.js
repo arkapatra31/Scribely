@@ -130,6 +130,57 @@
     })();
   }
 
+  /* ---------- demo video: autoplay in view, chapters, sound when available ---------- */
+  const video = $("#demoVideo");
+  if (video) {
+    const player = video.closest(".player");
+    const playBtn = $("#demoPlay");
+    const soundBtn = $("#demoSound");
+    const bar = $("#demoProgress");
+    const chapterBtns = $$(".chapters button");
+    const starts = chapterBtns.map((b) => Number(b.dataset.t));
+    let userPaused = false;
+
+    const play = () => video.play().catch(() => {});
+    video.addEventListener("play", () => player.classList.add("playing"));
+    video.addEventListener("pause", () => player.classList.remove("playing"));
+    playBtn.addEventListener("click", () => { userPaused = false; play(); });
+    video.addEventListener("click", () => {
+      if (video.paused) { userPaused = false; play(); } else { userPaused = true; video.pause(); }
+    });
+    chapterBtns.forEach((b) => b.addEventListener("click", () => {
+      video.currentTime = Number(b.dataset.t);
+      userPaused = false;
+      play();
+    }));
+
+    video.addEventListener("timeupdate", () => {
+      const t = video.currentTime;
+      if (video.duration) bar.style.width = `${(t / video.duration) * 100}%`;
+      let i = starts.findLastIndex((s) => t >= s);
+      if (i < 0) i = 0;
+      const end = starts[i + 1] ?? video.duration ?? t;
+      chapterBtns.forEach((b, j) => b.classList.toggle("on", j === i));
+      chapterBtns[i].style.setProperty("--p", `${Math.min(100, ((t - starts[i]) / Math.max(0.1, end - starts[i])) * 100)}%`);
+      // Offer sound only if this recording actually has an audio track.
+      if (soundBtn.hidden && t > 0.5 && (video.webkitAudioDecodedByteCount > 0 || video.mozHasAudio || video.audioTracks?.length)) {
+        soundBtn.hidden = false;
+      }
+    });
+    soundBtn.addEventListener("click", () => {
+      video.muted = !video.muted;
+      soundBtn.setAttribute("aria-pressed", String(!video.muted));
+      soundBtn.textContent = video.muted ? "Sound on" : "Mute";
+    });
+
+    if (!reduceMotion) {
+      new IntersectionObserver(([e]) => {
+        if (e.isIntersecting && !userPaused) play();
+        else if (!e.isIntersecting) video.pause();
+      }, { threshold: 0.45 }).observe(video);
+    }
+  }
+
   /* ---------- story: steps drive the sticky stage ---------- */
   const stageCard = $(".stage-card");
   const steps = $$(".step");

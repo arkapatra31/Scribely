@@ -31,6 +31,7 @@
     Scribely
   </a>
   <nav aria-label="Main">
+    <a href="#demo">Demo</a>
     <a href="#how">How it works</a>
     <a href="#features">Features</a>
     <a href="#privacy">Privacy</a>
@@ -52,7 +53,7 @@
     <p class="lede reveal">Scribely listens to whatever you're studying, writes the transcript as it plays, and turns it into clean study notes the moment you're done. Your audio never leaves your computer.</p>
     <div class="cta reveal">
       <a class="btn btn-primary" href="#start">Get Scribely <span aria-hidden="true">→</span></a>
-      <a class="btn btn-ghost" href="#how">See how it works</a>
+      <a class="btn btn-ghost" href="#demo"><span class="play-ico" aria-hidden="true"></span> Watch the demo</a>
     </div>
     <ul class="hero-meta reveal" aria-label="Highlights">
       <li><strong>100</strong> languages</li>
@@ -114,6 +115,36 @@
   <div class="marquee-track">
     <span>Azure OpenAI</span><span>OpenAI</span><span>Anthropic</span><span>Gemini</span><span>Ollama</span><span>faster-whisper</span><span>LangGraph</span><span>Tauri</span><span>FastAPI</span><span>SQLite</span>
     <span aria-hidden="true">Azure OpenAI</span><span aria-hidden="true">OpenAI</span><span aria-hidden="true">Anthropic</span><span aria-hidden="true">Gemini</span><span aria-hidden="true">Ollama</span><span aria-hidden="true">faster-whisper</span><span aria-hidden="true">LangGraph</span><span aria-hidden="true">Tauri</span><span aria-hidden="true">FastAPI</span><span aria-hidden="true">SQLite</span>
+  </div>
+</section>
+
+<!-- ============================== DEMO ============================== -->
+<section class="demo" id="demo">
+  <div class="section-head reveal">
+    <p class="kicker">See it in action</p>
+    <h2>One lecture, start to finish.<br><em>In under a minute.</em></h2>
+    <p class="lede">Press record, let the lecture play, watch the transcript write itself, then turn it into notes, restructure them and export a PDF.</p>
+  </div>
+  <div class="player reveal">
+    <div class="player-glow" aria-hidden="true"></div>
+    <div class="player-frame">
+      <div class="player-bar"><span class="tdots"><i></i><i></i><i></i></span><span class="player-title">Scribely</span></div>
+      <div class="player-screen">
+        <video id="demoVideo" src="media/scribely-demo.mp4" poster="media/scribely-demo-poster.jpg" muted playsinline loop preload="metadata" aria-describedby="demoCaption"></video>
+        <button class="sound" id="demoSound" type="button" hidden aria-pressed="false">Sound on</button>
+        <button class="big-play" id="demoPlay" type="button" aria-label="Play the demo"><span></span></button>
+        <div class="progress" aria-hidden="true"><i id="demoProgress"></i></div>
+      </div>
+    </div>
+    <ol class="chapters" aria-label="Jump to a moment in the demo">
+      <li><button type="button" data-t="3.5"><b>Record</b><small>One click or ⌘⇧⌥R</small></button></li>
+      <li><button type="button" data-t="6"><b>Live transcript</b><small>Timestamped, on-device</small></button></li>
+      <li><button type="button" data-t="13.5"><b>Pause</b><small>Timer stops with you</small></button></li>
+      <li><button type="button" data-t="31"><b>Summarize</b><small>Notes in seconds</small></button></li>
+      <li><button type="button" data-t="42"><b>Restructure</b><small>Outline · Q&amp;A · Condensed</small></button></li>
+      <li><button type="button" data-t="52"><b>Export</b><small>PDF or web page</small></button></li>
+    </ol>
+    <p class="player-caption" id="demoCaption">Recorded from the real Scribely interface; the sample lecture and its notes are demo content.</p>
   </div>
 </section>
 

@@ -482,6 +482,34 @@ section { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
 .foot nav a { text-decoration: none; color: var(--muted); }
 .foot nav a:hover { color: var(--ink); }
 
+/* ---------- demo video ---------- */
+.demo { padding: 150px 0 40px; }
+.player { position: relative; max-width: 1060px; margin: 0 auto; }
+.player-glow { position: absolute; inset: 8% 6% 18%; background: radial-gradient(closest-side, rgba(139,133,255,0.55), transparent); filter: blur(70px); z-index: -1; }
+.player-frame { border-radius: 18px; overflow: hidden; border: 1px solid var(--line-2); background: #0b0b14; box-shadow: 0 60px 140px -50px rgba(0,0,0,0.95), 0 30px 80px -50px rgba(139,133,255,0.7); }
+.player-bar { display: flex; align-items: center; gap: 14px; padding: 11px 14px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.03); }
+.player-title { margin: 0 auto; transform: translateX(-26px); font-size: 0.8rem; color: var(--faint); }
+.player-screen { position: relative; aspect-ratio: 1440 / 900; background: #f2efe8; }
+.player-screen video { display: block; width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+.big-play { position: absolute; inset: 0; margin: auto; width: 84px; height: 84px; border-radius: 50%; border: 0; cursor: pointer; background: rgba(12,11,22,0.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 0 0 10px rgba(139,133,255,0.18), 0 20px 50px rgba(0,0,0,0.5); transition: transform 0.3s var(--ease), opacity 0.3s; }
+.big-play span { position: absolute; left: 34px; top: 27px; border-style: solid; border-width: 15px 0 15px 24px; border-color: transparent transparent transparent #fff; }
+.big-play:hover { transform: scale(1.06); }
+.player.playing .big-play { opacity: 0; pointer-events: none; transform: scale(0.8); }
+.sound { position: absolute; right: 14px; bottom: 18px; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.2); background: rgba(12,11,22,0.75); color: #fff; font: 500 0.82rem var(--sans); cursor: pointer; }
+.progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0,0,0,0.12); }
+.progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-3)); }
+.chapters { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; list-style: none; margin: 18px 0 0; padding: 0; }
+.chapters button { width: 100%; height: 100%; text-align: left; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; font: inherit; transition: border-color 0.3s, background 0.3s, transform 0.3s var(--ease); position: relative; overflow: hidden; }
+.chapters button:hover { border-color: var(--line-2); transform: translateY(-2px); }
+.chapters b { display: block; font-size: 0.9rem; font-weight: 600; }
+.chapters small { display: block; margin-top: 2px; color: var(--faint); font-size: 0.75rem; line-height: 1.35; }
+.chapters button.on { border-color: rgba(139,133,255,0.6); background: rgba(139,133,255,0.12); }
+.chapters button.on::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: var(--p, 0%); background: var(--accent); }
+.player-caption { margin: 16px 0 0; text-align: center; color: var(--faint); font-size: 0.82rem; }
+.play-ico { display: inline-block; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent currentColor; }
+@media (max-width: 860px) { .chapters { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 620px) { .demo { padding-top: 110px; } .chapters { grid-template-columns: 1fr 1fr; } .big-play { width: 64px; height: 64px; } .big-play span { left: 26px; top: 20px; border-width: 12px 0 12px 19px; } }
+
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
   .hero { grid-template-columns: 1fr; text-align: center; min-height: 0; padding-top: 70px; gap: 70px; }
