@@ -37,12 +37,7 @@ from scribely.capture import (
 from scribely.capture import permission as capture_permission
 from scribely.config import LLMConfig, Settings, SttConfig
 from scribely.credentials import Credentials
-from scribely.export import (
-    PdfUnavailableError,
-    export_filename,
-    render_session_html,
-    render_session_pdf,
-)
+from scribely.export import export_filename, render_session_html, render_session_pdf
 from scribely.models import (
     AudioLevelMessage,
     BackendState,
@@ -731,8 +726,6 @@ class LiveSessionManager:
 
         try:
             path = await asyncio.to_thread(write)
-        except PdfUnavailableError as err:
-            raise SessionError("export_failed", str(err)) from None
         except OSError as err:
             raise SessionError(
                 "export_failed", f"Couldn't write the export to {directory}: {err.strerror or err}."

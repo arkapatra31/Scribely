@@ -52,13 +52,10 @@ def session_title(session: Session) -> str:
 
 
 def render_session_html(
-    session: Session,
-    segments: list[TranscriptSegment],
-    notes: SessionNotes | None,
-    template: str = "session.html.j2",
+    session: Session, segments: list[TranscriptSegment], notes: SessionNotes | None
 ) -> str:
     duration = segments[-1].end if segments else 0.0
-    return _env.get_template(template).render(
+    return _env.get_template("session.html.j2").render(
         session=session,
         title=notes.doc.title if notes else session_title(session),
         session_title=session_title(session),

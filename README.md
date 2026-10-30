@@ -50,7 +50,7 @@ flowchart LR
             STT["02 Transcribe<br/>faster-whisper + Silero VAD<br/>live, timestamped"]
             Session["03 Session<br/>in-memory rolling window<br/>→ SQLite (WAL)"]
             Notes["04 Notes pipeline<br/>LangGraph · llm_factory<br/>map-reduce for long lectures"]
-            Export["05 Export<br/>Jinja2 → HTML<br/>WeasyPrint → PDF"]
+            Export["05 Export<br/>Jinja2 → HTML<br/>ReportLab → PDF"]
             Capture --> STT --> Session
             Session -->|on Summarize| Notes
             Notes --> Session
@@ -78,7 +78,7 @@ flowchart LR
 2. **Transcribe**: voice activity detection cuts the stream at pauses; faster-whisper turns each piece into timestamped text, with quick live previews in between.
 3. **Session**: the UI is fed from an in-memory window; segments are written to SQLite (WAL) about once a second, so a crash loses at most a second.
 4. **Notes**: only when you press Summarize on a stopped session. `llm_factory` builds the configured LangChain chat model; short transcripts take one call, long ones are chunked to fit the model's context, summarized in parallel and merged. All output is validated with Pydantic.
-5. **Export**: Jinja2 renders the notes and transcript to a web page, or WeasyPrint renders a PDF with the app's fonts and layout.
+5. **Export**: Jinja2 renders the notes and transcript to a web page, or ReportLab renders a PDF with the app's fonts and layout (a plain pip dependency, no system libraries).
 
 The Rust shell launches the backend when the app opens and stops it on quit; the backend also exits on its own if the app disappears. Everything crossing the WebSocket is defined once as Pydantic models (`backend/scribely/models.py`) and the TypeScript types are generated from them.
 
@@ -93,7 +93,7 @@ The Rust shell launches the backend when the app opens and stops it on quit; the
 | Speech to text | faster-whisper (CTranslate2) + Silero VAD |
 | Storage | SQLite (WAL) + files in `data/` |
 | Notes | LangGraph + LangChain providers (OpenAI/Azure, Anthropic, Gemini, Ollama), Pydantic structured output |
-| Export | Jinja2 (HTML), WeasyPrint (PDF) |
+| Export | Jinja2 (HTML), ReportLab (PDF) |
 | Config / logs | TOML via pydantic-settings · structlog |
 | Python tooling | uv, ruff, mypy, pytest |
 

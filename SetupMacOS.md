@@ -20,10 +20,10 @@ xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-**Git, uv (Python), Node.js 22 and Pango (for PDF export):**
+**Git, uv (Python) and Node.js 22:**
 
 ```bash
-brew install git uv node@22 pango
+brew install git uv node@22
 brew link --overwrite node@22
 npm install -g pnpm@10
 ```
@@ -192,5 +192,4 @@ pnpm dev
 | Speech model download fails | Check your internet connection and press **Retry** in Settings → Speech. |
 | Summarize says the API key is missing | Keys are forgotten when Scribely quits; paste it again in Settings → Notes model. |
 | Ollama model not found | Run `ollama pull <model>` and pick it in Settings. |
-| PDF export says Pango is missing | Run `brew install pango` and restart Scribely. If you start the backend yourself from a terminal on Apple Silicon, run `export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` first. |
 | The shortcut does nothing | Another app may own ⌘⇧⌥R; the Terminal output says so at start. Use the Record button or the menu-bar menu. |
