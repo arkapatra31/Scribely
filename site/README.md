@@ -7,7 +7,7 @@ Static site for GitHub Pages: `index.html`, `styles.css`, `main.js`, bundled fon
 
 ## Demo video
 
-The "See it in action" section plays `media/scribely-demo.mp4`, with `media/scribely-demo-poster.jpg` as the still shown before it plays. The current clip was recorded from the real interface. Its sound is the lecture Scribely hears, a synthetic voice (espeak-ng with an MBROLA voice) synced to the moment Record is pressed; the transcript and notes are demo content. To replace it with a real recording (a real lecture, real transcription, real notes, with sound):
+The "See it in action" section plays `media/scribely-demo.mp4`, with `media/scribely-demo-poster.jpg` as the still shown before it plays. The current clip was recorded from the real interface. Its sound is the lecture Scribely hears, an AI voice (Kokoro, open-source neural text-to-speech, voice `af_heart`) synced to the moment Record is pressed; the transcript and notes are demo content. To replace it with a real recording (a real lecture, real transcription, real notes, with sound):
 
 ### 1. Record on your Mac
 
